@@ -3,8 +3,19 @@ import { supabase } from '../supabase.js';
 export const StatsView = {
     render: () => `
         <div class="view-container active glass-panel">
-            <h1>Global QB Leaderboard</h1>
-            <p>Year-To-Date (YTD) stats for all eligible quarterbacks.</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1>Global QB Leaderboard</h1>
+                    <p>Year-To-Date (YTD) stats for all eligible quarterbacks.</p>
+                </div>
+                <div>
+                    <label for="stats-view-select" style="font-weight: bold; margin-right: 0.5rem;">View:</label>
+                    <select id="stats-view-select" style="background: rgba(0,0,0,0.5); color: var(--text-primary); border: 1px solid var(--glass-border); padding: 0.5rem; border-radius: 4px; min-width: 150px;">
+                        <option value="QB">Individual QBs</option>
+                        <option value="TM_QB">Team QBs</option>
+                    </select>
+                </div>
+            </div>
             
             <div style="margin-top: 2rem; overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; text-align: left;">
@@ -33,48 +44,73 @@ export const StatsView = {
 
         // Fetch all stats and players
         const { data, error } = await supabase.from('player_stats')
-            .select('*, players(name, team, headshot_url)');
+            .select('*, players(name, team, headshot_url, position)');
             
         if (error) {
             document.getElementById('stats-table-body').innerHTML = `<tr><td colspan="9">Error loading stats.</td></tr>`;
             return;
         }
 
-        // Aggregate stats by player
-        const aggregated = data.reduce((acc, stat) => {
-            const pid = stat.player_id;
-            if (!acc[pid]) {
-                acc[pid] = {
-                    id: pid,
-                    name: stat.players?.name || 'Unknown',
-                    team: stat.players?.team || '-',
-                    headshot: stat.players?.headshot_url || '',
-                    passYds: 0,
-                    passTd: 0,
-                    ints: 0,
-                    sacks: 0,
-                    fumbles: 0,
-                    customPoints: 0
-                };
-            }
-            acc[pid].passYds += stat.passing_yards || 0;
-            acc[pid].passTd += stat.passing_tds || 0;
-            acc[pid].ints += stat.interceptions || 0;
-            acc[pid].sacks += stat.sacks || 0;
-            acc[pid].fumbles += stat.fumbles_lost || 0;
-            acc[pid].customPoints += stat.custom_points || 0;
-            return acc;
-        }, {});
-
-        // Convert to array and sort by customPoints descending (worst QBs first)
-        const sorted = Object.values(aggregated).sort((a, b) => b.customPoints - a.customPoints);
-
-        // Store sorted array globally for the view
-        StatsView.currentData = sorted;
+        StatsView.rawData = data || [];
         StatsView.sortCol = 'customPoints';
         StatsView.sortAsc = false;
+
+        const processAndRender = () => {
+            const viewType = document.getElementById('stats-view-select').value;
+            
+            // Filter data by position
+            const filteredData = StatsView.rawData.filter(stat => stat.players?.position === viewType);
+
+            // Aggregate stats by player
+            const aggregated = filteredData.reduce((acc, stat) => {
+                const pid = stat.player_id;
+                if (!acc[pid]) {
+                    acc[pid] = {
+                        id: pid,
+                        name: stat.players?.name || 'Unknown',
+                        team: stat.players?.team || '-',
+                        headshot: stat.players?.headshot_url || '',
+                        passYds: 0,
+                        passTd: 0,
+                        ints: 0,
+                        sacks: 0,
+                        fumbles: 0,
+                        customPoints: 0
+                    };
+                }
+                acc[pid].passYds += stat.passing_yards || 0;
+                acc[pid].passTd += stat.passing_tds || 0;
+                acc[pid].ints += stat.interceptions || 0;
+                acc[pid].sacks += stat.sacks || 0;
+                acc[pid].fumbles += stat.fumbles_lost || 0;
+                acc[pid].customPoints += stat.custom_points || 0;
+                return acc;
+            }, {});
+
+            // Convert to array and sort
+            StatsView.currentData = Object.values(aggregated).sort((a, b) => b.customPoints - a.customPoints);
+            
+            // Apply current column sorting
+            if (StatsView.sortCol !== 'customPoints' || StatsView.sortAsc !== false) {
+                StatsView.currentData.sort((a, b) => {
+                    let valA = a[StatsView.sortCol];
+                    let valB = b[StatsView.sortCol];
+                    if (StatsView.sortCol === 'rank') { valA = a.customPoints; valB = b.customPoints; }
+                    
+                    if (valA < valB) return StatsView.sortAsc ? -1 : 1;
+                    if (valA > valB) return StatsView.sortAsc ? 1 : -1;
+                    return 0;
+                });
+                if (StatsView.sortCol === 'rank') StatsView.currentData.reverse();
+            }
+
+            StatsView.renderTable();
+        };
+
+        // Listen for view changes
+        document.getElementById('stats-view-select').addEventListener('change', processAndRender);
         
-        StatsView.renderTable();
+        processAndRender();
 
         // Add event listeners to headers
         document.getElementById('stats-header-row').querySelectorAll('th').forEach(th => {
