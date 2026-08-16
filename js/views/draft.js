@@ -117,15 +117,15 @@ export const DraftView = {
                 
                 qbList.innerHTML = players.map(p => {
                     const proj = projMap[p.id] ? projMap[p.id].toFixed(2) : 'N/A';
-                    return \`
+                    return `
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--glass-bg); border-radius: 4px;">
                         <div style="display: flex; flex-direction: column;">
-                            <span style="font-weight: 600;">\${p.name} (\${p.team})</span>
-                            <span style="font-size: 0.8rem; color: var(--accent-primary);">Proj: \${proj} pts</span>
+                            <span style="font-weight: 600;">${p.name} (${p.team})</span>
+                            <span style="font-size: 0.8rem; color: var(--accent-primary);">Proj: ${proj} pts</span>
                         </div>
                         <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Draft</button>
                     </div>
-                \`}).join('');
+                `}).join('');
             } else {
                 qbList.innerHTML = '<p style="color: var(--text-secondary)">No active QBs found in database.</p>';
             }
