@@ -7,7 +7,6 @@ def calculate_worst_qb_score(row):
     """
     Calculates the 'Worst QB' fantasy score based on custom rules.
     """
-    # 1. Completion Percentage: 20 * (1 - completion percentage)
     attempts = row.get('attempts', 0)
     completions = row.get('completions', 0)
     comp_pct_score = 0
@@ -15,18 +14,16 @@ def calculate_worst_qb_score(row):
         comp_pct = completions / attempts
         comp_pct_score = 20 * (1 - comp_pct)
         
-    # Stats
     pass_yds = row.get('passing_yards', 0)
     pass_tds = row.get('passing_tds', 0)
     ints = row.get('interceptions', 0)
-    pick_sixes = row.get('pick_sixes', 0) # Note: nfl_data_py might not easily separate pick sixes from standard INTs in weekly aggregates without deep play-by-play analysis.
+    pick_sixes = row.get('pick_sixes', 0)
     rush_yds = row.get('rushing_yards', 0)
     rush_tds = row.get('rushing_tds', 0)
     fumbles_lost = row.get('fumbles_lost', 0)
     sacks = row.get('sacks', 0)
-    team_loss = row.get('team_loss', False) # Requires joining schedule data to see if game is final and team lost
+    team_loss = row.get('team_loss', False)
     
-    # Calculate total
     score = comp_pct_score
     score += (pass_yds * -0.05)
     score += (pass_tds * -5)
@@ -43,7 +40,6 @@ def calculate_worst_qb_score(row):
 def main():
     print("Starting Worst QB Live Stats Scraper...")
     
-    # Init Supabase
     url: str = os.environ.get("SUPABASE_URL")
     key: str = os.environ.get("SUPABASE_SERVICE_KEY")
     if not url or not key:
@@ -52,12 +48,11 @@ def main():
         
     supabase: Client = create_client(url, key)
     
-    # 1. Fetch Weekly Stats from nfl_data_py
-    year = 2024 # Target year
-    # Ideally, we dynamically determine the week based on current date
-    # For now, we fetch the latest weekly data
+    year = 2024
+    print("Fetching Roster and Weekly Data...")
     try:
         weekly_data = nfl.import_weekly_data([year])
+        rosters = nfl.import_rosters([year])
     except Exception as e:
         print(f"Error fetching NFL data: {e}")
         return
@@ -66,28 +61,50 @@ def main():
         print("No data available for the given year.")
         return
         
-    # Filter for Quarterbacks only (position mapping might be needed, or filtering by passing attempts)
+    # Filter for Quarterbacks
     qbs = weekly_data[weekly_data['position'] == 'QB'].copy()
     
-    # Map nfl_data_py columns to our scoring function
-    # nfl_data_py columns: player_id, player_name, completions, attempts, passing_yards, passing_tds, interceptions, sacks, sack_yards, sack_fumbles, sack_fumbles_lost, passing_air_yards, passing_yards_after_catch, passing_first_downs, passing_epa, passing_2pt_conversions, pacr, dakota, rushing_yards, rushing_tds...
     records_to_upsert = []
     
     for index, row in qbs.iterrows():
+        player_id = row['player_id']
+        
+        # Get bio from roster data
+        roster_info = rosters[rosters['player_id'] == player_id]
+        headshot = ""
+        height = ""
+        weight = 0
+        college = ""
+        age = 0
+        
+        if not roster_info.empty:
+            r = roster_info.iloc[0]
+            headshot = r.get('headshot_url', "")
+            height = r.get('height', "")
+            weight = r.get('weight', 0)
+            college = r.get('college', "")
+            age = r.get('age', 0)
+            # handle NaNs safely
+            weight = int(weight) if pd.notna(weight) else 0
+            age = int(age) if pd.notna(age) else 0
+            headshot = headshot if pd.notna(headshot) else ""
+            height = height if pd.notna(height) else ""
+            college = college if pd.notna(college) else ""
+
         stats = {
-            'player_id': row['player_id'],
+            'player_id': player_id,
             'week': row['week'],
             'attempts': row['attempts'],
             'completions': row['completions'],
             'passing_yards': row['passing_yards'],
             'passing_tds': row['passing_tds'],
             'interceptions': row['interceptions'],
-            'pick_sixes': 0, # Needs advanced PBP cross-referencing
+            'pick_sixes': 0, 
             'rushing_yards': row['rushing_yards'],
             'rushing_tds': row['rushing_tds'],
-            'fumbles_lost': row.get('sack_fumbles_lost', 0), # Fallback mapping
+            'fumbles_lost': row.get('sack_fumbles_lost', 0),
             'sacks': row['sacks'],
-            'team_loss': False # Needs schedule cross-referencing
+            'team_loss': False
         }
         
         custom_points = calculate_worst_qb_score(stats)
@@ -107,26 +124,31 @@ def main():
             'custom_points': float(custom_points)
         })
         
-        # We also want to upsert the Player into the players table to ensure foreign keys exist
+        # Upsert Player Info with new bio fields
         player_data = {
-            'id': row['player_id'],
+            'id': player_id,
             'name': row['player_display_name'],
             'team': row['recent_team'],
-            'position': 'QB'
+            'position': 'QB',
+            'headshot_url': headshot,
+            'height': height,
+            'weight': weight,
+            'college': college,
+            'age': age
         }
         try:
             supabase.table('players').upsert(player_data).execute()
         except Exception as e:
-            pass # Ignore if it fails due to duplicates, upsert should handle it
+            pass
 
     # Upsert Stats
     if records_to_upsert:
         print(f"Upserting {len(records_to_upsert)} stat records...")
         try:
-            response = supabase.table('player_stats').upsert(records_to_upsert).execute()
+            supabase.table('player_stats').upsert(records_to_upsert).execute()
             print("Stats updated successfully!")
         except Exception as e:
-            print(f"Error updating Supabase: {e}")
+            print(f"Error updating Supabase stats: {e}")
             
 if __name__ == '__main__':
     main()

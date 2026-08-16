@@ -1,5 +1,8 @@
 import { DashboardView } from './views/dashboard.js';
 import { LeaguesView } from './views/leagues.js';
+import { LeagueDetailView } from './views/league_detail.js';
+import { StatsView } from './views/stats.js';
+import { PlayerProfileView } from './views/player_profile.js';
 import { DraftView } from './views/draft.js';
 import { Router } from './router.js';
 import { supabase } from './supabase.js';
@@ -8,6 +11,9 @@ import { supabase } from './supabase.js';
 const routes = {
     'dashboard': DashboardView,
     'leagues': LeaguesView,
+    'league_detail': LeagueDetailView,
+    'stats': StatsView,
+    'player_profile': PlayerProfileView,
     'draft': DraftView,
     'matchups': {
         render: () => `<div class="view-container active glass-panel"><h1>Live Scores</h1><p>Live stats feed will appear here during games.</p></div>`,

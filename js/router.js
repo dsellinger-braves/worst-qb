@@ -3,20 +3,25 @@ export class Router {
         this.routes = routes;
         this.appContent = document.getElementById('app-content');
         
-        // Listen to nav links
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', (e) => {
+        // Listen to nav links globally
+        document.addEventListener('click', (e) => {
+            // Find closest element with nav-link class or data-route
+            const link = e.target.closest('[data-route]');
+            if (link) {
                 e.preventDefault();
-                const route = e.target.getAttribute('data-route');
-                this.navigate(route);
-            });
+                const route = link.getAttribute('data-route');
+                // Extract any data attributes to pass as params
+                const params = { ...link.dataset };
+                delete params.route; // remove the route key itself
+                this.navigate(route, params);
+            }
         });
     }
 
-    navigate(routeName) {
+    navigate(routeName, params = {}) {
         if (!this.routes[routeName]) return;
 
-        // Update active nav link
+        // Update active nav link (only for main top-level navs)
         document.querySelectorAll('.nav-link').forEach(link => {
             if (link.getAttribute('data-route') === routeName) {
                 link.classList.add('active');
@@ -26,11 +31,11 @@ export class Router {
         });
 
         // Render the view
-        this.appContent.innerHTML = this.routes[routeName].render();
+        this.appContent.innerHTML = this.routes[routeName].render(params);
         
         // Execute any initialization logic for the view
         if (typeof this.routes[routeName].init === 'function') {
-            this.routes[routeName].init();
+            this.routes[routeName].init(params);
         }
     }
 }

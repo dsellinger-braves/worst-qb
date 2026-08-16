@@ -35,7 +35,7 @@ export const LeaguesView = {
             listEl.innerHTML = data.map(league => `
                 <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <h3>${league.name}</h3>
+                        <h3><a href="#" data-route="league_detail" data-id="${league.id}" style="color: var(--text-primary); text-decoration: none;">${league.name} <span style="font-size: 0.8rem;">(View Details)</span></a></h3>
                         <p>Status: ${league.draft_status}</p>
                     </div>
                     <button class="btn join-league-btn" data-id="${league.id}" style="background: var(--glass-border); color: white;">Join</button>
