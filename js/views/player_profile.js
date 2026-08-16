@@ -54,10 +54,21 @@ export const PlayerProfileView = {
             document.getElementById('pp-headshot').innerHTML = `<span style="font-size: 3rem; color: var(--text-secondary);">🏈</span>`;
         }
         
+        const formatHeight = (h) => {
+            if (!h) return '';
+            const num = parseInt(h, 10);
+            if (!isNaN(num)) {
+                const feet = Math.floor(num / 12);
+                const inches = num % 12;
+                return `${feet}'${inches}"`;
+            }
+            return h;
+        };
+
         document.getElementById('pp-bio').innerHTML = `
             <span><strong>Team:</strong> ${player.team || '-'}</span>
             <span><strong>Position:</strong> ${player.position || 'QB'}</span>
-            ${player.height ? `<span><strong>Height:</strong> ${player.height}</span>` : ''}
+            ${player.height ? `<span><strong>Height:</strong> ${formatHeight(player.height)}</span>` : ''}
             ${player.weight ? `<span><strong>Weight:</strong> ${player.weight} lbs</span>` : ''}
             ${player.age ? `<span><strong>Age:</strong> ${player.age}</span>` : ''}
             ${player.college ? `<span><strong>College:</strong> ${player.college}</span>` : ''}
