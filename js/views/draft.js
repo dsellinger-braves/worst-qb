@@ -34,6 +34,9 @@ export const DraftView = {
     init: async () => {
         if (!supabase) return;
         
+        // Clean up any existing channels to prevent "channel already exists" errors on revisit
+        await supabase.removeAllChannels();
+        
         // Subscribe to real-time draft picks
         const channel = supabase.channel('draft_room')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draft_picks' }, payload => {

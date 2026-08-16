@@ -5,6 +5,7 @@ import { ProjectionsView } from './views/projections.js';
 import { StatsView } from './views/stats.js';
 import { PlayerProfileView } from './views/player_profile.js';
 import { DraftView } from './views/draft.js';
+import { RulesView } from './views/rules.js';
 import { Router } from './router.js';
 import { supabase } from './supabase.js';
 
@@ -17,6 +18,7 @@ const routes = {
     'stats': StatsView,
     'player_profile': PlayerProfileView,
     'draft': DraftView,
+    'rules': RulesView,
     'matchups': {
         render: () => `<div class="view-container active glass-panel"><h1>Live Scores</h1><p>Live stats feed will appear here during games.</p></div>`,
         init: () => {}
@@ -27,7 +29,7 @@ const routes = {
 const router = new Router(routes);
 
 // Default Route
-router.navigate('dashboard');
+router.navigate('rules');
 
 // Authentication Handler
 const authBtn = document.getElementById('auth-btn');

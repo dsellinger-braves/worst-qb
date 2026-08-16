@@ -16,6 +16,8 @@ def calculate_worst_qb_score(row):
     if attempts > 0:
         comp_pct = completions / attempts
         comp_pct_score = 20 * (1 - comp_pct)
+    else:
+        comp_pct_score = -20
         
     pass_yds = row.get('passing_yards', 0)
     pass_tds = row.get('passing_tds', 0)
