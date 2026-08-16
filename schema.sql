@@ -10,7 +10,8 @@ CREATE TABLE public.leagues (
     created_by UUID REFERENCES auth.users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     current_week INTEGER DEFAULT 1,
-    draft_status TEXT DEFAULT 'pending' -- 'pending', 'active', 'completed'
+    draft_status TEXT DEFAULT 'pending', -- 'pending', 'active', 'completed'
+    scoring_type TEXT DEFAULT 'individual' -- 'individual', 'team_qb'
 );
 
 -- 2. League Members (Tracks Season Long Points)
@@ -60,6 +61,8 @@ CREATE TABLE public.player_stats (
     rushing_tds INTEGER DEFAULT 0,
     fumbles_lost INTEGER DEFAULT 0,
     sacks INTEGER DEFAULT 0,
+    attempts INTEGER DEFAULT 0,
+    completions INTEGER DEFAULT 0,
     completion_percentage NUMERIC DEFAULT 0,
     team_loss BOOLEAN DEFAULT FALSE,
     custom_points NUMERIC DEFAULT 0, -- The calculated "Worst QB" score

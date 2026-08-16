@@ -53,9 +53,25 @@ export const DraftView = {
                 }
             });
 
+        // Fetch the user's first league to determine scoring type
+        const { data: { session } } = await supabase.auth.getSession();
+        let isTeamLeague = false;
+        if (session) {
+            const { data: userLeagues } = await supabase
+                .from('league_members')
+                .select('leagues(scoring_type)')
+                .eq('user_id', session.user.id)
+                .limit(1);
+            if (userLeagues && userLeagues.length > 0 && userLeagues[0].leagues?.scoring_type === 'team_qb') {
+                isTeamLeague = true;
+            }
+        }
+
+        const playerPosition = isTeamLeague ? 'TM_QB' : 'QB';
+
         // Fetch players and latest projections
         const [{ data: players }, { data: projections }] = await Promise.all([
-            supabase.from('players').select('*').limit(50),
+            supabase.from('players').select('*').eq('position', playerPosition).limit(50),
             supabase.from('player_projections').select('*')
         ]);
         

@@ -208,6 +208,82 @@ def main():
         except Exception as e:
             pass
 
+    # Aggregate Team QBs
+    team_stats_dict = {}
+    for index, row in qbs.iterrows():
+        team = row.get('recent_team')
+        if not team or pd.isna(team):
+            continue
+            
+        week = row.get('week')
+        key = (team, week)
+        
+        if key not in team_stats_dict:
+            team_stats_dict[key] = {
+                'player_id': f'TEAM_{team}',
+                'team': team,
+                'week': int(week),
+                'attempts': 0,
+                'completions': 0,
+                'passing_yards': 0,
+                'passing_tds': 0,
+                'interceptions': 0,
+                'pick_sixes': 0,
+                'rushing_yards': 0,
+                'rushing_tds': 0,
+                'fumbles_lost': 0,
+                'sacks': 0,
+                'team_loss': False
+            }
+            
+        ts = team_stats_dict[key]
+        ts['attempts'] += int(row.get('attempts', 0) if pd.notna(row.get('attempts')) else 0)
+        ts['completions'] += int(row.get('completions', 0) if pd.notna(row.get('completions')) else 0)
+        ts['passing_yards'] += int(row.get('passing_yards', 0) if pd.notna(row.get('passing_yards')) else 0)
+        ts['passing_tds'] += int(row.get('passing_tds', 0) if pd.notna(row.get('passing_tds')) else 0)
+        ts['interceptions'] += int(row.get('interceptions', 0) if pd.notna(row.get('interceptions')) else 0)
+        ts['rushing_yards'] += int(row.get('rushing_yards', 0) if pd.notna(row.get('rushing_yards')) else 0)
+        ts['rushing_tds'] += int(row.get('rushing_tds', 0) if pd.notna(row.get('rushing_tds')) else 0)
+        ts['fumbles_lost'] += int(row.get('sack_fumbles_lost', 0) if pd.notna(row.get('sack_fumbles_lost')) else 0)
+        ts['sacks'] += int(row.get('sacks', 0) if pd.notna(row.get('sacks')) else 0)
+
+    # Upsert Team QB players and their stats
+    for key, ts in team_stats_dict.items():
+        team = ts['team']
+        player_data = {
+            'id': ts['player_id'],
+            'name': f'{team} QBs',
+            'team': team,
+            'position': 'TM_QB',
+            'headshot_url': '',
+            'height': '',
+            'weight': 0,
+            'college': '',
+            'age': 0
+        }
+        try:
+            supabase.table('players').upsert(player_data).execute()
+        except Exception as e:
+            pass
+            
+        custom_points = calculate_worst_qb_score(ts)
+        records_to_upsert.append({
+            'player_id': ts['player_id'],
+            'week': ts['week'],
+            'passing_yards': ts['passing_yards'],
+            'passing_tds': ts['passing_tds'],
+            'interceptions': ts['interceptions'],
+            'pick_sixes': ts['pick_sixes'],
+            'rushing_yards': ts['rushing_yards'],
+            'rushing_tds': ts['rushing_tds'],
+            'fumbles_lost': ts['fumbles_lost'],
+            'sacks': ts['sacks'],
+            'attempts': ts['attempts'],
+            'completions': ts['completions'],
+            'completion_percentage': float(ts['completions']/ts['attempts']) if ts['attempts'] > 0 else 0,
+            'custom_points': float(custom_points)
+        })
+
     # Upsert Stats
     if records_to_upsert:
         print(f"Upserting {len(records_to_upsert)} stat records...")
