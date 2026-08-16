@@ -19,10 +19,6 @@ export const RulesView = {
                             <td style="color: var(--accent-primary)">+3.0</td>
                         </tr>
                         <tr>
-                            <td>No Pass Attempts</td>
-                            <td style="color: var(--accent-secondary)">-20.0</td>
-                        </tr>
-                        <tr>
                             <td>Fumble Lost</td>
                             <td style="color: var(--accent-primary)">+3.0</td>
                         </tr>
@@ -56,6 +52,11 @@ export const RulesView = {
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <div style="margin-top: 2rem; background: rgba(255, 50, 50, 0.1); border: 1px solid var(--accent-secondary); padding: 1.5rem; border-radius: 8px;">
+                <h3 style="color: var(--accent-secondary); margin-bottom: 0.5rem;">⚠️ The Golden Penalty: No Pass Attempts</h3>
+                <p style="color: #ccc; line-height: 1.5;">If a drafted or started player finishes the week with <strong>zero pass attempts</strong>, their total score is automatically set to <strong style="color: var(--accent-secondary)">-20.0 points</strong>, regardless of any rushing yards, touchdowns, or other stats they may have accumulated. They must actually attempt passes to be eligible for normal Worst QB scoring!</p>
             </div>
 
             <div style="margin-top: 2rem;">
