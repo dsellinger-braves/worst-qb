@@ -38,9 +38,35 @@ export const LeaguesView = {
                         <h3>${league.name}</h3>
                         <p>Status: ${league.draft_status}</p>
                     </div>
-                    <button class="btn" style="background: var(--glass-border); color: white;" onclick="alert('Join logic to be implemented')">Join</button>
+                    <button class="btn join-league-btn" data-id="${league.id}" style="background: var(--glass-border); color: white;">Join</button>
                 </div>
             `).join('');
+
+            // Attach event listeners for join buttons
+            document.querySelectorAll('.join-league-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const leagueId = e.target.getAttribute('data-id');
+                    const teamName = prompt("Enter your Team Name for this league:");
+                    if (!teamName) return;
+
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) return alert("You must be logged in to join a league!");
+
+                    const { error } = await supabase.from('league_members').insert([
+                        { league_id: leagueId, user_id: session.user.id, team_name: teamName }
+                    ]);
+
+                    if (error) {
+                        if (error.code === '23505') { // Unique violation
+                            alert("You are already a member of this league!");
+                        } else {
+                            alert("Error joining league: " + error.message);
+                        }
+                    } else {
+                        alert("Successfully joined the league!");
+                    }
+                });
+            });
         };
 
         fetchLeagues();
