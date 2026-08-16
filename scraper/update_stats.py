@@ -52,7 +52,7 @@ def main():
     print("Fetching Roster and Weekly Data...")
     try:
         weekly_data = nfl.import_weekly_data([year])
-        rosters = nfl.import_rosters([year])
+        rosters = nfl.import_seasonal_rosters([year])
     except Exception as e:
         print(f"Error fetching NFL data: {e}")
         return
