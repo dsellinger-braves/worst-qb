@@ -48,7 +48,7 @@ def main():
         
     supabase: Client = create_client(url, key)
     
-    year = 2025
+    year = 2023
     print("Fetching Roster and Weekly Data...")
     try:
         weekly_data = nfl.import_weekly_data([year])
