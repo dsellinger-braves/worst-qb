@@ -1,3 +1,7 @@
 supabase>=2.3.0
 nfl_data_py>=0.3.1
 pandas>=2.0.0
+supabase>=2.0.0
+requests
+beautifulsoup4
+lxml

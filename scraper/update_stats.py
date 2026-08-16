@@ -2,6 +2,9 @@ import os
 import nfl_data_py as nfl
 import pandas as pd
 from supabase import create_client, Client
+import requests
+from bs4 import BeautifulSoup
+import re
 
 def calculate_worst_qb_score(row):
     """
@@ -36,6 +39,66 @@ def calculate_worst_qb_score(row):
     score += (5 if team_loss else 0)
     
     return round(score, 2)
+
+def scrape_cbs_projections(year, current_week):
+    print("Scraping CBS Projections...")
+    url = f"https://www.cbssports.com/fantasy/football/stats/QB/{year}/season/projections/nonppr/"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        rows = soup.find_all('tr', class_='TableBase-bodyTr')
+        projections = []
+        for row in rows:
+            cols = row.find_all('td')
+            if len(cols) < 11:
+                continue
+            
+            name_cell = cols[0].find('a')
+            if not name_cell:
+                continue
+            name = name_cell.text.strip()
+            
+            try:
+                vals = [c.text.strip() for c in cols]
+                att = float(vals[1])
+                cmp = float(vals[2])
+                p_yds = float(vals[3])
+                p_td = float(vals[4])
+                p_int = float(vals[5])
+                r_yds = float(vals[8])
+                r_td = float(vals[9])
+                fl = float(vals[10])
+                
+                # Convert season to weekly (divide by 17)
+                stats = {
+                    'attempts': att / 17,
+                    'completions': cmp / 17,
+                    'passing_yards': p_yds / 17,
+                    'passing_tds': p_td / 17,
+                    'interceptions': p_int / 17,
+                    'pick_sixes': 0,
+                    'rushing_yards': r_yds / 17,
+                    'rushing_tds': r_td / 17,
+                    'fumbles_lost': fl / 17,
+                    'sacks': 0,
+                    'team_loss': False
+                }
+                
+                custom_pts = calculate_worst_qb_score(stats)
+                projections.append({
+                    'name': name,
+                    'projected_custom_points': float(custom_pts),
+                    'week': current_week
+                })
+            except Exception as e:
+                pass
+                
+        return projections
+    except Exception as e:
+        print(f"Error scraping CBS: {e}")
+        return []
 
 def main():
     print("Starting Worst QB Live Stats Scraper...")
@@ -120,6 +183,8 @@ def main():
             'rushing_tds': int(stats['rushing_tds']),
             'fumbles_lost': int(stats['fumbles_lost']),
             'sacks': int(stats['sacks']),
+            'attempts': int(stats['attempts']),
+            'completions': int(stats['completions']),
             'completion_percentage': float(stats['completions']/stats['attempts']) if stats['attempts'] > 0 else 0,
             'custom_points': float(custom_points)
         })
@@ -149,6 +214,45 @@ def main():
             print("Stats updated successfully!")
         except Exception as e:
             print(f"Error updating Supabase stats: {e}")
+            
+    # Upsert Projections
+    current_week = int(weekly_data['week'].max() + 1) if not weekly_data.empty else 1
+    projections_data = scrape_cbs_projections(year, current_week)
+    if projections_data:
+        try:
+            db_players = supabase.table('players').select('id, name').execute().data
+            
+            # Simple fuzzy matching (last name or exact match)
+            name_to_id = {}
+            for p in db_players:
+                name_to_id[p['name'].lower()] = p['id']
+                # also map last names for easier matching (e.g. "P. Mahomes" -> "Mahomes")
+                parts = p['name'].split(' ')
+                if len(parts) > 1:
+                    name_to_id[parts[-1].lower()] = p['id']
+                    
+            proj_to_upsert = []
+            for p in projections_data:
+                # Try exact
+                pid = name_to_id.get(p['name'].lower())
+                # Try last name
+                if not pid:
+                    parts = p['name'].split(' ')
+                    pid = name_to_id.get(parts[-1].lower())
+                    
+                if pid:
+                    proj_to_upsert.append({
+                        'player_id': pid,
+                        'week': p['week'],
+                        'projected_custom_points': p['projected_custom_points'],
+                        'opponent': 'TBD'
+                    })
+                    
+            if proj_to_upsert:
+                supabase.table('player_projections').upsert(proj_to_upsert).execute()
+                print(f"Projections updated successfully for {len(proj_to_upsert)} players!")
+        except Exception as e:
+            print(f"Error updating projections: {e}")
             
 if __name__ == '__main__':
     main()
