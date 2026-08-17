@@ -212,7 +212,52 @@ export const LeagueDetailView = {
             LeagueDetailView.renderTeamView(LeagueDetailView.teams[0].user_id);
         }
     },
-    
+    setupAdminSettings: (league) => {
+        const modal = document.getElementById('ld-settings-modal');
+        document.getElementById('ld-settings-btn').onclick = () => {
+            const s = league.scoring_settings || {};
+            document.getElementById('s-pass-yds').value = s.pass_yds ?? -0.05;
+            document.getElementById('s-pass-tds').value = s.pass_tds ?? -5.0;
+            document.getElementById('s-ints').value = s.ints ?? 3.0;
+            document.getElementById('s-pick-sixes').value = s.pick_sixes ?? 5.0;
+            document.getElementById('s-rush-yds').value = s.rush_yds ?? -0.1;
+            document.getElementById('s-rush-tds').value = s.rush_tds ?? -5.0;
+            document.getElementById('s-fumbles').value = s.fumbles_lost ?? 3.0;
+            document.getElementById('s-sacks').value = s.sacks ?? 1.0;
+            document.getElementById('s-team-loss').value = s.team_loss ?? 5.0;
+            document.getElementById('s-no-att').value = s.no_attempts ?? -20.0;
+            document.getElementById('s-comp-mult').value = s.completion_penalty_multiplier ?? 20.0;
+            modal.style.display = 'flex';
+        };
+        
+        document.getElementById('ld-settings-close').onclick = () => modal.style.display = 'none';
+        
+        document.getElementById('ld-settings-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const newSettings = {
+                pass_yds: parseFloat(document.getElementById('s-pass-yds').value),
+                pass_tds: parseFloat(document.getElementById('s-pass-tds').value),
+                ints: parseFloat(document.getElementById('s-ints').value),
+                pick_sixes: parseFloat(document.getElementById('s-pick-sixes').value),
+                rush_yds: parseFloat(document.getElementById('s-rush-yds').value),
+                rush_tds: parseFloat(document.getElementById('s-rush-tds').value),
+                fumbles_lost: parseFloat(document.getElementById('s-fumbles').value),
+                sacks: parseFloat(document.getElementById('s-sacks').value),
+                team_loss: parseFloat(document.getElementById('s-team-loss').value),
+                no_attempts: parseFloat(document.getElementById('s-no-att').value),
+                completion_penalty_multiplier: parseFloat(document.getElementById('s-comp-mult').value)
+            };
+            
+            const { error } = await supabase.from('leagues').update({ scoring_settings: newSettings }).eq('id', league.id);
+            if (error) {
+                alert("Error saving settings.");
+            } else {
+                modal.style.display = 'none';
+                LeagueDetailView.init({ id: league.id }); // Reload to recalculate
+            }
+        };
+    },
+
     setupTabs: () => {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
