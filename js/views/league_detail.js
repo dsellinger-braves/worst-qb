@@ -116,8 +116,14 @@ export const LeagueDetailView = {
                                 <label>Golden Penalty (No Pass Attempts)</label>
                                 <input type="number" step="0.1" id="s-no-att" class="form-input" style="width: 100px; text-align: right;">
                             </div>
+
+                            <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Draft Order Override (Week <span id="s-draft-order-week"></span>)</h3>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Drag and drop to manually set the draft order for the current active week. Leave default to use standings.</p>
+                            <ul id="s-draft-order-list" style="list-style: none; padding: 0; margin-bottom: 2rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- Draggable items injected here -->
+                            </ul>
                         </div>
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">Save Settings</button>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Save Settings & Order</button>
                     </form>
                 </div>
             </div>
@@ -265,6 +271,63 @@ export const LeagueDetailView = {
             document.getElementById('s-team-loss').value = s.team_loss ?? 5.0;
             document.getElementById('s-no-att').value = s.no_attempts ?? -20.0;
             document.getElementById('s-comp-mult').value = s.completion_penalty_multiplier ?? 20.0;
+            
+            // Draft Order
+            document.getElementById('s-draft-order-week').innerText = league.current_week;
+            const draftList = document.getElementById('s-draft-order-list');
+            const existingOverrides = s.draft_order_overrides || {};
+            const currentOverride = existingOverrides[league.current_week];
+            
+            let orderedTeams = [...LeagueDetailView.teams];
+            if (currentOverride) {
+                orderedTeams.sort((a, b) => {
+                    const idxA = currentOverride.indexOf(a.user_id);
+                    const idxB = currentOverride.indexOf(b.user_id);
+                    if (idxA === -1 && idxB === -1) return 0;
+                    if (idxA === -1) return 1;
+                    if (idxB === -1) return -1;
+                    return idxA - idxB;
+                });
+            } else {
+                orderedTeams.sort((a, b) => a.season_points - b.season_points);
+            }
+            
+            draftList.innerHTML = orderedTeams.map((t, i) => `
+                <li class="draft-order-item" draggable="true" data-userid="${t.user_id}" style="padding: 0.5rem 1rem; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 4px; display: flex; justify-content: space-between; align-items: center; cursor: grab; user-select: none;">
+                    <span><span class="order-num" style="color: var(--text-secondary); margin-right: 0.5rem;">${i + 1}.</span> ${t.team_name}</span>
+                    <span style="color: var(--text-secondary);">☰</span>
+                </li>
+            `).join('');
+
+            // Drag and Drop Logic
+            let draggedItem = null;
+            draftList.querySelectorAll('.draft-order-item').forEach(item => {
+                item.addEventListener('dragstart', () => {
+                    draggedItem = item;
+                    setTimeout(() => item.style.opacity = '0.5', 0);
+                });
+                item.addEventListener('dragend', () => {
+                    setTimeout(() => {
+                        draggedItem.style.opacity = '1';
+                        draggedItem = null;
+                        draftList.querySelectorAll('.draft-order-item').forEach((li, idx) => {
+                            li.querySelector('.order-num').innerText = `${idx + 1}.`;
+                        });
+                    }, 0);
+                });
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    const afterElement = [...draftList.querySelectorAll('.draft-order-item:not(.dragging)')].find(child => {
+                        return e.clientY <= child.getBoundingClientRect().top + child.offsetHeight / 2;
+                    });
+                    if (afterElement == null) {
+                        draftList.appendChild(draggedItem);
+                    } else {
+                        draftList.insertBefore(draggedItem, afterElement);
+                    }
+                });
+            });
+
             modal.style.display = 'flex';
         };
         
@@ -272,6 +335,17 @@ export const LeagueDetailView = {
         
         document.getElementById('ld-settings-form').onsubmit = async (e) => {
             e.preventDefault();
+            
+            const newOverrides = {};
+            const draftList = document.getElementById('s-draft-order-list');
+            draftList.querySelectorAll('.draft-order-item').forEach(item => {
+                const uid = item.getAttribute('data-userid');
+                if (!newOverrides[league.current_week]) newOverrides[league.current_week] = [];
+                newOverrides[league.current_week].push(uid);
+            });
+            
+            const existingOverrides = league.scoring_settings?.draft_order_overrides || {};
+            
             const newSettings = {
                 pass_yds: parseFloat(document.getElementById('s-pass-yds').value),
                 pass_tds: parseFloat(document.getElementById('s-pass-tds').value),
@@ -283,7 +357,11 @@ export const LeagueDetailView = {
                 sacks: parseFloat(document.getElementById('s-sacks').value),
                 team_loss: parseFloat(document.getElementById('s-team-loss').value),
                 no_attempts: parseFloat(document.getElementById('s-no-att').value),
-                completion_penalty_multiplier: parseFloat(document.getElementById('s-comp-mult').value)
+                completion_penalty_multiplier: parseFloat(document.getElementById('s-comp-mult').value),
+                draft_order_overrides: {
+                    ...existingOverrides,
+                    ...newOverrides
+                }
             };
             
             const { error } = await supabase.from('leagues').update({ scoring_settings: newSettings }).eq('id', league.id);

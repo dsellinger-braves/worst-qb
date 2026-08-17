@@ -29,7 +29,7 @@ export const ProjectionsView = {
 
         // Fetch projections
         const { data, error } = await supabase.from('player_projections')
-            .select('*, players(name, team, headshot_url)');
+            .select('*, players(name, team, position, headshot_url)');
             
         if (error) {
             document.getElementById('proj-table-body').innerHTML = `<tr><td colspan="5">Error loading projections.</td></tr>`;
@@ -38,7 +38,7 @@ export const ProjectionsView = {
         
         // Find the latest week
         const maxWeek = data.length > 0 ? Math.max(...data.map(d => d.week)) : 0;
-        const currentData = data.filter(d => d.week === maxWeek).map(d => ({
+        const currentData = data.filter(d => d.week === maxWeek && (d.players?.position === 'QB' || d.players?.position === 'TM_QB')).map(d => ({
             id: d.player_id,
             name: d.players?.name || 'Unknown',
             team: d.players?.team || '-',

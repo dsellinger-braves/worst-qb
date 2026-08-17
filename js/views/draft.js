@@ -72,7 +72,7 @@ export const DraftView = {
                     <!-- Draft Order Tracker -->
                     <div class="glass-panel" style="padding: 1.5rem;">
                         <h3 style="margin-bottom: 0.5rem;">Draft Order</h3>
-                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Inverse Season Standings</p>
+                        <p id="draft-order-label" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Inverse Season Standings</p>
                         <div id="draft-order-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; padding-right: 0.5rem;">
                             Loading draft order...
                         </div>
@@ -229,7 +229,24 @@ export const DraftView = {
             .eq('league_id', leagueId)
             .order('season_points', { ascending: true }); // Lowest points (worst teams) first
         
-        DraftView.state.members = members || [];
+        let sortedMembers = members || [];
+        
+        // Apply manual override if it exists
+        const overrides = league.scoring_settings?.draft_order_overrides || {};
+        const currentOverride = overrides[DraftView.state.currentWeek];
+        
+        if (currentOverride) {
+            sortedMembers.sort((a, b) => {
+                const idxA = currentOverride.indexOf(a.user_id);
+                const idxB = currentOverride.indexOf(b.user_id);
+                if (idxA === -1 && idxB === -1) return 0;
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+        }
+        
+        DraftView.state.members = sortedMembers;
         
         await DraftView.fetchPicks();
         await DraftView.fetchPlayers();
@@ -299,8 +316,17 @@ export const DraftView = {
 
     renderDraftOrder: () => {
         const listEl = document.getElementById('draft-order-list');
-        const { members, allPicks, leagueInfo, userId } = DraftView.state;
+        const { members, allPicks, leagueInfo, userId, currentWeek } = DraftView.state;
         const isAdmin = leagueInfo?.created_by === userId;
+        
+        const overrides = leagueInfo?.scoring_settings?.draft_order_overrides || {};
+        if (overrides[currentWeek]) {
+            document.getElementById('draft-order-label').innerText = 'Manual Override Active';
+            document.getElementById('draft-order-label').style.color = 'var(--accent-primary)';
+        } else {
+            document.getElementById('draft-order-label').innerText = 'Inverse Season Standings';
+            document.getElementById('draft-order-label').style.color = 'var(--text-secondary)';
+        }
         
         if (members.length === 0) {
             listEl.innerHTML = 'No teams found.';
@@ -336,7 +362,7 @@ export const DraftView = {
 
     renderPlayerPool: () => {
         const tbody = document.getElementById('qb-list');
-        let { players, projections, searchQuery, allPicks, myPicks, activeTab } = DraftView.state;
+        let { players, projections, searchQuery, allPicks, myPicks, activeTab, members } = DraftView.state;
         
         // Filter out drafted players
         const draftedIds = new Set((allPicks || []).map(p => p.player_id));
