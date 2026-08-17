@@ -90,37 +90,39 @@ def scrape_espn_projections(year, current_week):
             pro_team_id = player.get('proTeamId', 0)
             team = ESPN_TEAM_MAP.get(pro_team_id, 'FA')
             
-            # Find the projected stats (statSourceId = 1, statSplitTypeId = 1)
+            # Find the projected stats for all weeks (statSourceId = 1, statSplitTypeId = 1)
             stats = p_data.get('stats', [])
-            proj_stats = {}
             for s in stats:
-                if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1 and s.get('scoringPeriodId') == current_week:
+                if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1 and s.get('seasonId') == year:
+                    week = s.get('scoringPeriodId')
                     proj_stats = s.get('stats', {})
-                    break
                     
-            # ESPN Stat ID mapping to our format
-            stats_dict = {
-                'attempts': float(proj_stats.get('0', 0)),
-                'completions': float(proj_stats.get('1', 0)),
-                'passing_yards': float(proj_stats.get('3', 0)),
-                'passing_tds': float(proj_stats.get('4', 0)),
-                'interceptions': float(proj_stats.get('20', 0)),
-                'pick_sixes': 0,
-                'rushing_yards': float(proj_stats.get('24', 0)),
-                'rushing_tds': float(proj_stats.get('25', 0)),
-                'fumbles_lost': float(proj_stats.get('72', 0)),
-                'sacks': 0, # Sacks typically aren't projected
-                'team_loss': False
-            }
-            
-            custom_pts = calculate_worst_qb_score(stats_dict)
-            projections.append({
-                'id': f"espn-{player.get('id')}",
-                'name': name,
-                'team': team,
-                'projected_custom_points': float(custom_pts),
-                'week': current_week
-            })
+                    if not proj_stats or week == 0:
+                        continue
+                        
+                    # ESPN Stat ID mapping to our format
+                    stats_dict = {
+                        'attempts': float(proj_stats.get('0', 0)),
+                        'completions': float(proj_stats.get('1', 0)),
+                        'passing_yards': float(proj_stats.get('3', 0)),
+                        'passing_tds': float(proj_stats.get('4', 0)),
+                        'interceptions': float(proj_stats.get('20', 0)),
+                        'pick_sixes': 0,
+                        'rushing_yards': float(proj_stats.get('24', 0)),
+                        'rushing_tds': float(proj_stats.get('25', 0)),
+                        'fumbles_lost': float(proj_stats.get('72', 0)),
+                        'sacks': 0, # Sacks typically aren't projected
+                        'team_loss': False
+                    }
+                    
+                    custom_pts = calculate_worst_qb_score(stats_dict)
+                    projections.append({
+                        'id': f"espn-{player.get('id')}",
+                        'name': name,
+                        'team': team,
+                        'projected_custom_points': float(custom_pts),
+                        'week': week
+                    })
             
         print(f"Found {len(projections)} projections from ESPN.")
         return projections
