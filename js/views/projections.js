@@ -4,8 +4,13 @@ export const ProjectionsView = {
     render: () => `
         <div class="view-container active glass-panel">
             <h1>Weekly Projections</h1>
-            <p>Projected Worst QB points for the upcoming week based on CBS Sports.</p>
+            <p>Projected Worst QB points for the upcoming week based on ESPN.</p>
             
+            <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem;">
+                <input type="text" id="proj-search" class="input" placeholder="Search players..." style="flex: 1;" onkeyup="ProjectionsView.handleFilter()">
+                <input type="number" id="proj-min-attempts" class="input" placeholder="Min Proj Attempts" style="width: 200px;" onkeyup="ProjectionsView.handleFilter()" onchange="ProjectionsView.handleFilter()" min="0" step="1">
+            </div>
+
             <div style="margin-top: 2rem; overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; text-align: left;">
                     <thead>
@@ -38,14 +43,27 @@ export const ProjectionsView = {
         
         // Find the latest week
         const maxWeek = data.length > 0 ? Math.max(...data.map(d => d.week)) : 0;
-        const currentData = data.filter(d => d.week === maxWeek && (d.players?.position === 'QB' || d.players?.position === 'TM_QB')).map(d => ({
-            id: d.player_id,
-            name: d.players?.name || 'Unknown',
-            team: d.players?.team || '-',
-            headshot: d.players?.headshot_url || '',
-            opponent: d.opponent || 'TBD',
-            pts: d.projected_custom_points || 0
-        }));
+        const currentData = data.filter(d => d.week === maxWeek && (d.players?.position === 'QB' || d.players?.position === 'TM_QB')).map(d => {
+            let oppName = d.opponent || 'TBD';
+            let rawStats = {};
+            try {
+                if (d.opponent && d.opponent.startsWith('{')) {
+                    const parsed = JSON.parse(d.opponent);
+                    oppName = parsed.opp || 'TBD';
+                    rawStats = parsed.raw || {};
+                }
+            } catch(e) {}
+            
+            return {
+                id: d.player_id,
+                name: d.players?.name || 'Unknown',
+                team: d.players?.team || '-',
+                headshot: d.players?.headshot_url || '',
+                opponent: oppName,
+                raw: rawStats,
+                pts: d.projected_custom_points || 0
+            };
+        });
 
         currentData.sort((a, b) => b.pts - a.pts); // worst QB points first
         
@@ -84,14 +102,33 @@ export const ProjectionsView = {
             });
         });
     },
+    handleFilter: () => {
+        ProjectionsView.renderTable();
+    },
     renderTable: () => {
         const tbody = document.getElementById('proj-table-body');
-        if (!ProjectionsView.currentData || ProjectionsView.currentData.length === 0) {
+        const searchQuery = (document.getElementById('proj-search')?.value || '').toLowerCase();
+        const minAtts = parseFloat(document.getElementById('proj-min-attempts')?.value) || 0;
+
+        let filtered = ProjectionsView.currentData || [];
+        
+        if (searchQuery) {
+            filtered = filtered.filter(p => 
+                p.name.toLowerCase().includes(searchQuery) || 
+                p.team.toLowerCase().includes(searchQuery)
+            );
+        }
+        
+        if (minAtts > 0) {
+            filtered = filtered.filter(p => (p.raw?.attempts || 0) >= minAtts);
+        }
+
+        if (filtered.length === 0) {
             tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 2rem;">No projections found.</td></tr>`;
             return;
         }
 
-        tbody.innerHTML = ProjectionsView.currentData.map((p, idx) => `
+        tbody.innerHTML = filtered.map((p, idx) => `
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${idx + 1}</td>
                 <td style="padding: 1rem 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
