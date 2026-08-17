@@ -38,7 +38,12 @@ def calculate_worst_qb_score(row):
     score += (rush_tds * -5)
     score += (fumbles_lost * 4)
     score += (sacks * 1)
-    score += (5 if team_loss else 0)
+    
+    team_loss_prob = row.get('team_loss_prob', 0)
+    if team_loss_prob > 0:
+        score += (5 * team_loss_prob)
+    else:
+        score += (5 if team_loss else 0)
     
     return round(score, 2)
 
@@ -83,10 +88,59 @@ ESPN_SLOT_MAP = {
     16: 'DST'
 }
 
+def fetch_schedules_and_odds(year):
+    import urllib.request
+    import json
+    schedule_matrix = {}
+    for week in range(1, 19):
+        url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={year}&seasontype=2&week={week}"
+        try:
+            req = urllib.request.Request(url)
+            res = urllib.request.urlopen(req)
+            data = json.loads(res.read())
+            for event in data.get('events', []):
+                for comp in event.get('competitions', []):
+                    home_id = None
+                    away_id = None
+                    for c in comp['competitors']:
+                        if c['homeAway'] == 'home': home_id = int(c['team']['id'])
+                        if c['homeAway'] == 'away': away_id = int(c['team']['id'])
+                        
+                    odds_list = comp.get('odds', [])
+                    home_prob = 0.5
+                    away_prob = 0.5
+                    if odds_list:
+                        ml_data = odds_list[0].get('moneyline', {})
+                        if ml_data:
+                            home_ml_str = ml_data.get('home', {}).get('close', {}).get('odds', 'EVEN')
+                            away_ml_str = ml_data.get('away', {}).get('close', {}).get('odds', 'EVEN')
+                            def parse_ml(ml_str):
+                                if ml_str.upper() == 'EVEN': return 100
+                                try: return int(ml_str)
+                                except: return 100
+                            home_ml = parse_ml(home_ml_str)
+                            away_ml = parse_ml(away_ml_str)
+                            def imp_prob(ml):
+                                if ml > 0: return 100.0 / (ml + 100.0)
+                                else: return abs(ml) / (abs(ml) + 100.0)
+                            hp = imp_prob(home_ml)
+                            ap = imp_prob(away_ml)
+                            total = hp + ap
+                            if total > 0:
+                                home_prob = hp / total
+                                away_prob = ap / total
+                    schedule_matrix[(home_id, week)] = {'opponent': away_id, 'loss_prob': 1.0 - home_prob}
+                    schedule_matrix[(away_id, week)] = {'opponent': home_id, 'loss_prob': 1.0 - away_prob}
+        except Exception:
+            pass
+    return schedule_matrix
+
 def scrape_espn_projections(year, current_week):
     print("Scraping ESPN Projections (All Players)...")
     import urllib.request
     import json
+    
+    schedule_matrix = fetch_schedules_and_odds(year)
     
     url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}/segments/0/leaguedefaults/3?view=kona_player_info&platformVersion=03952a53323901871b54cebc123891a6966b3143"
     
@@ -101,6 +155,21 @@ def scrape_espn_projections(year, current_week):
         res = urllib.request.urlopen(req)
         data = json.loads(res.read())
         
+        # Build defense sacks matrix
+        defense_sacks = {}
+        for p_data in data.get('players', []):
+            player = p_data.get('player', {})
+            pos_id = player.get('defaultPositionId', 0)
+            if pos_id == 16: # D/ST
+                pro_team_id = player.get('proTeamId', 0)
+                stats = player.get('stats', [])
+                for s in stats:
+                    if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1:
+                        week = s.get('scoringPeriodId')
+                        proj_stats = s.get('stats', {})
+                        sacks = float(proj_stats.get('99', 0))
+                        defense_sacks[(pro_team_id, week)] = sacks
+                        
         projections = []
         for p_data in data.get('players', []):
             player = p_data.get('player', {})
@@ -140,6 +209,14 @@ def scrape_espn_projections(year, current_week):
                     if not proj_stats or week == 0:
                         continue
                         
+                    opp_info = schedule_matrix.get((pro_team_id, week), {'opponent': 0, 'loss_prob': 0.5})
+                    opp_team_id = opp_info['opponent']
+                    loss_prob = opp_info['loss_prob']
+                    
+                    proj_sacks = 0
+                    if pos_id == 1 or 'QB' in pos_label:
+                        proj_sacks = defense_sacks.get((opp_team_id, week), 0)
+
                     # ESPN Stat ID mapping to our format
                     stats_dict = {
                         'attempts': float(proj_stats.get('0', 0)),
@@ -151,7 +228,8 @@ def scrape_espn_projections(year, current_week):
                         'rushing_yards': float(proj_stats.get('24', 0)),
                         'rushing_tds': float(proj_stats.get('25', 0)),
                         'fumbles_lost': float(proj_stats.get('72', 0)),
-                        'sacks': 0, # Sacks typically aren't projected
+                        'sacks': proj_sacks,
+                        'team_loss_prob': loss_prob,
                         'team_loss': False
                     }
                     
@@ -160,7 +238,7 @@ def scrape_espn_projections(year, current_week):
                     # Store raw stats in opponent column as a JSON string since we can't alter schema
                     import json
                     opp_payload = json.dumps({
-                        'opp': 'TBD',
+                        'opp': ESPN_TEAM_MAP.get(opp_team_id, 'TBD'),
                         'raw': stats_dict
                     })
                     

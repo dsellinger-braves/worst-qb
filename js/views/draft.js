@@ -29,7 +29,10 @@ export const DraftView = {
                                 <button class="btn pool-tab" data-tab="OTHER" style="padding: 0.5rem 1rem; border-radius: 6px; background: transparent; border: none; font-size: 0.9rem; color: var(--text-secondary);">Other Positions</button>
                             </div>
                         </div>
-                        <input type="text" id="draft-search" placeholder="Search player or team..." style="padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.5); color: white; min-width: 200px;">
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <input type="number" id="draft-min-attempts" placeholder="Min Atts" style="padding: 0.5rem; border-radius: 20px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.5); color: white; width: 100px;" min="0" step="1">
+                            <input type="text" id="draft-search" placeholder="Search player or team..." style="padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.5); color: white; min-width: 200px;">
+                        </div>
                     </div>
                     
                     <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
@@ -119,7 +122,9 @@ export const DraftView = {
             myPicks: [],
             players: [],
             projections: {},
+            rawStats: {},
             searchQuery: '',
+            minAttempts: 0,
             activeTab: 'QB',
             sortCol: 'name',
             sortAsc: true
@@ -157,11 +162,14 @@ export const DraftView = {
             document.getElementById('profile-modal-content').innerHTML = ''; // Clear memory
         };
 
-        // Search Handler
-        document.getElementById('draft-search').addEventListener('input', (e) => {
-            DraftView.state.searchQuery = e.target.value.toLowerCase();
+        // Search Handlers
+        const handleFilter = () => {
+            DraftView.state.searchQuery = document.getElementById('draft-search').value.toLowerCase();
+            DraftView.state.minAttempts = parseFloat(document.getElementById('draft-min-attempts').value) || 0;
             DraftView.renderPlayerPool();
-        });
+        };
+        document.getElementById('draft-search').addEventListener('input', handleFilter);
+        document.getElementById('draft-min-attempts').addEventListener('input', handleFilter);
 
         // Tab Handlers
         document.querySelectorAll('.pool-tab').forEach(btn => {
@@ -295,14 +303,21 @@ export const DraftView = {
         
         DraftView.state.players = players || [];
         
-        // Map projections
+        // Map projections and raw stats
         const projMap = {};
+        const rawMap = {};
         if (projections) {
             projections.forEach(p => {
                 projMap[p.player_id] = p.projected_custom_points;
+                try {
+                    if (p.opponent && p.opponent.startsWith('{')) {
+                        rawMap[p.player_id] = JSON.parse(p.opponent).raw || {};
+                    }
+                } catch(e) {}
             });
         }
         DraftView.state.projections = projMap;
+        DraftView.state.rawStats = rawMap;
     },
 
     renderYourPicks: () => {
@@ -400,6 +415,15 @@ export const DraftView = {
                 p.name.toLowerCase().includes(searchQuery) || 
                 (p.team && p.team.toLowerCase().includes(searchQuery))
             );
+        }
+
+        // Apply Min Attempts
+        if (DraftView.state.minAttempts > 0) {
+            available = available.filter(p => {
+                const raw = DraftView.state.rawStats[p.id];
+                if (!raw) return false;
+                return (raw.attempts || 0) >= DraftView.state.minAttempts;
+            });
         }
 
         // Apply Sort
