@@ -1,4 +1,5 @@
 import { supabase } from '../supabase.js';
+import { calculateLeagueScore } from '../scoring.js';
 
 export const PlayerProfileView = {
     render: () => `
@@ -22,13 +23,13 @@ export const PlayerProfileView = {
                         <thead>
                             <tr style="border-bottom: 2px solid var(--glass-border);">
                                 <th style="padding: 1rem 0.5rem;">Week</th>
-                                <th style="padding: 1rem 0.5rem;">Result</th>
                                 <th style="padding: 1rem 0.5rem;">Comp/Att</th>
                                 <th style="padding: 1rem 0.5rem;">Pass Yds</th>
                                 <th style="padding: 1rem 0.5rem;">Pass TD</th>
                                 <th style="padding: 1rem 0.5rem;">INT</th>
                                 <th style="padding: 1rem 0.5rem;">Sacks</th>
                                 <th style="padding: 1rem 0.5rem;">Fumbles</th>
+                                <th style="padding: 1rem 0.5rem;">Result</th>
                                 <th style="padding: 1rem 0.5rem; color: var(--accent-primary);">Fantasy Pts</th>
                             </tr>
                         </thead>
@@ -75,6 +76,17 @@ export const PlayerProfileView = {
             ${player.college ? `<span><strong>College:</strong> ${player.college}</span>` : ''}
         `;
 
+        // Check for League context to use dynamic scoring
+        let leagueSettings = null;
+        if (params.league) {
+            const { data: league } = await supabase.from('leagues').select('scoring_settings').eq('id', params.league).single();
+            if (league && league.scoring_settings) {
+                leagueSettings = league.scoring_settings;
+                // Add league badge to header
+                document.getElementById('pp-bio').innerHTML += `<span style="color: var(--accent-primary); font-weight: bold; border: 1px solid var(--accent-primary); padding: 0.1rem 0.4rem; border-radius: 4px;">Viewing with Custom League Scoring</span>`;
+            }
+        }
+
         // Fetch Game Log
         const { data: stats, error: sErr } = await supabase.from('player_stats')
             .select('*')
@@ -88,22 +100,27 @@ export const PlayerProfileView = {
             return;
         }
 
-        tbody.innerHTML = stats.map(s => `
+        tbody.innerHTML = stats.map(s => {
+            // Use dynamic league score if we came from a league, else default to database points
+            const pts = leagueSettings ? calculateLeagueScore(s, leagueSettings) : (s.custom_points || 0);
+            return `
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${s.week}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${s.team_loss ? '<span style="color: var(--accent-primary)">L</span>' : '<span style="color: var(--accent-success)">W</span>'}</td>
                 <td style="padding: 1rem 0.5rem;">${s.completions || 0} / ${s.attempts || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.passing_yards || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.passing_tds || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.interceptions || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.sacks || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.fumbles_lost || 0}</td>
-                <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${s.custom_points ? s.custom_points.toFixed(2) : '0.00'}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">${s.team_loss ? '<span style="color: var(--accent-primary)">L</span>' : '<span style="color: var(--accent-success)">W</span>'}</td>
+                <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${pts.toFixed(2)}</td>
             </tr>
-        `).join('');
+            `;
+        }).join('');
         
         // Add a totals row
         const totals = stats.reduce((acc, s) => {
+            const pts = leagueSettings ? calculateLeagueScore(s, leagueSettings) : (s.custom_points || 0);
             acc.comp += s.completions || 0;
             acc.att += s.attempts || 0;
             acc.yds += s.passing_yards || 0;
@@ -111,20 +128,20 @@ export const PlayerProfileView = {
             acc.ints += s.interceptions || 0;
             acc.sacks += s.sacks || 0;
             acc.fumbles += s.fumbles_lost || 0;
-            acc.pts += s.custom_points || 0;
+            acc.pts += pts;
             return acc;
         }, { comp: 0, att: 0, yds: 0, tds: 0, ints: 0, sacks: 0, fumbles: 0, pts: 0 });
         
         tbody.innerHTML += `
             <tr style="background: rgba(255,255,255,0.05); border-top: 2px solid var(--glass-border);">
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">Total</td>
-                <td style="padding: 1rem 0.5rem;">-</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.comp} / ${totals.att}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.yds}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.tds}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.ints}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.sacks}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.fumbles}</td>
+                <td style="padding: 1rem 0.5rem;">-</td>
                 <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${totals.pts.toFixed(2)}</td>
             </tr>
         `;

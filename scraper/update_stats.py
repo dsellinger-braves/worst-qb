@@ -199,7 +199,8 @@ def main():
             'attempts': int(stats['attempts']),
             'completions': int(stats['completions']),
             'completion_percentage': float(stats['completions']/stats['attempts']) if stats['attempts'] > 0 else 0,
-            'custom_points': float(custom_points)
+            'custom_points': float(custom_points),
+            'team_loss': bool(stats['team_loss'])
         })
         
         # Upsert Player Info with new bio fields
@@ -292,7 +293,8 @@ def main():
             'attempts': ts['attempts'],
             'completions': ts['completions'],
             'completion_percentage': float(ts['completions']/ts['attempts']) if ts['attempts'] > 0 else 0,
-            'custom_points': float(custom_points)
+            'custom_points': float(custom_points),
+            'team_loss': bool(ts['team_loss'])
         })
 
     # Upsert Stats
