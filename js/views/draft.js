@@ -299,27 +299,36 @@ export const DraftView = {
 
     renderDraftOrder: () => {
         const listEl = document.getElementById('draft-order-list');
-        const { members, allPicks } = DraftView.state;
+        const { members, allPicks, leagueInfo, userId } = DraftView.state;
+        const isAdmin = leagueInfo?.created_by === userId;
         
         if (members.length === 0) {
             listEl.innerHTML = 'No teams found.';
             return;
         }
 
+        window.undoPick = DraftView.undoPick; // Expose for inline onClick
+
         listEl.innerHTML = members.map((m, idx) => {
             // Check if they drafted yet
             const theirPicks = (allPicks || []).filter(p => p.user_id === m.user_id);
             const statusIcon = theirPicks.length >= 2 ? '✅' : (theirPicks.length === 1 ? '⏳' : '❌');
             
+            let undoBtn = '';
+            if (isAdmin && theirPicks.length > 0) {
+                undoBtn = `<button class="btn" style="padding: 0.1rem 0.4rem; font-size: 0.7rem; background: var(--accent-error); border: none; margin-left: 0.5rem;" onclick="undoPick('${m.user_id}')" title="Undo latest pick">Undo</button>`;
+            }
+
             return `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
                 <div>
                     <span style="font-weight: bold; color: var(--text-secondary); margin-right: 0.5rem;">${idx + 1}.</span>
-                    <span>${m.team_name}</span>
+                    <span style="font-size: 0.9rem;">${m.team_name}</span>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <span style="font-size: 0.8rem; color: var(--text-secondary);">${m.season_points.toFixed(2)} pts</span>
                     <span title="${theirPicks.length} / 2 picks made">${statusIcon}</span>
+                    ${undoBtn}
                 </div>
             </div>
         `}).join('');
@@ -472,6 +481,38 @@ export const DraftView = {
         } else {
             // Success! Refetch picks and re-render pool (or rely on realtime if it's fast enough, but manual refetch is safer)
             await DraftView.fetchPicks();
+            DraftView.renderPlayerPool();
+            DraftView.renderDraftOrder();
+        }
+    },
+
+    undoPick: async (targetUserId) => {
+        const { leagueId, currentWeek, allPicks } = DraftView.state;
+        
+        // Find their most recent pick
+        const theirPicks = allPicks.filter(p => p.user_id === targetUserId);
+        if (theirPicks.length === 0) return;
+        
+        // Sort by pick number descending
+        theirPicks.sort((a, b) => b.pick_number - a.pick_number);
+        const pickToUndo = theirPicks[0];
+        
+        const confirmed = confirm(`Are you sure you want to undo the pick for ${pickToUndo.players.name}?`);
+        if (!confirmed) return;
+        
+        const { error } = await supabase.from('draft_picks')
+            .delete()
+            .eq('league_id', leagueId)
+            .eq('user_id', targetUserId)
+            .eq('week', currentWeek)
+            .eq('pick_number', pickToUndo.pick_number);
+            
+        if (error) {
+            console.error(error);
+            alert("Error undoing pick.");
+        } else {
+            await DraftView.fetchPicks();
+            DraftView.renderDraftOrder();
             DraftView.renderPlayerPool();
         }
     },
