@@ -66,18 +66,56 @@ export const LeagueDetailView = {
                         <button id="ld-settings-close" class="btn" style="padding: 0.2rem 0.5rem;">✕</button>
                     </div>
                     <form id="ld-settings-form">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                            <div><label>Pass Yds</label><input type="number" step="0.01" id="s-pass-yds" class="form-input"></div>
-                            <div><label>Pass TDs</label><input type="number" step="0.1" id="s-pass-tds" class="form-input"></div>
-                            <div><label>Interceptions</label><input type="number" step="0.1" id="s-ints" class="form-input"></div>
-                            <div><label>Pick Sixes</label><input type="number" step="0.1" id="s-pick-sixes" class="form-input"></div>
-                            <div><label>Rush Yds</label><input type="number" step="0.01" id="s-rush-yds" class="form-input"></div>
-                            <div><label>Rush TDs</label><input type="number" step="0.1" id="s-rush-tds" class="form-input"></div>
-                            <div><label>Fumbles Lost</label><input type="number" step="0.1" id="s-fumbles" class="form-input"></div>
-                            <div><label>Sacks</label><input type="number" step="0.1" id="s-sacks" class="form-input"></div>
-                            <div><label>Team Loss Bonus</label><input type="number" step="0.1" id="s-team-loss" class="form-input"></div>
-                            <div><label>No Attempts Penalty</label><input type="number" step="0.1" id="s-no-att" class="form-input"></div>
-                            <div style="grid-column: 1 / -1;"><label>Completion % Penalty Multiplier</label><input type="number" step="0.1" id="s-comp-mult" class="form-input"></div>
+                        <div style="margin-bottom: 2rem;">
+                            <h3 style="margin-top: 1rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Passing</h3>
+                            <div class="setting-row">
+                                <label>Pass Yds</label>
+                                <input type="number" step="0.01" id="s-pass-yds" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+                            <div class="setting-row">
+                                <label>Pass TDs</label>
+                                <input type="number" step="0.1" id="s-pass-tds" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+                            <div class="setting-row">
+                                <label>Interceptions</label>
+                                <input type="number" step="0.1" id="s-ints" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+                            <div class="setting-row">
+                                <label>Pick Sixes</label>
+                                <input type="number" step="0.1" id="s-pick-sixes" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+                            <div class="setting-row">
+                                <label>Completion % Penalty Multiplier</label>
+                                <input type="number" step="0.1" id="s-comp-mult" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+
+                            <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Rushing & Sacks</h3>
+                            <div class="setting-row">
+                                <label>Rush Yds</label>
+                                <input type="number" step="0.01" id="s-rush-yds" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+                            <div class="setting-row">
+                                <label>Rush TDs</label>
+                                <input type="number" step="0.1" id="s-rush-tds" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+                            <div class="setting-row">
+                                <label>Fumbles Lost</label>
+                                <input type="number" step="0.1" id="s-fumbles" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+                            <div class="setting-row">
+                                <label>Sacks Taken</label>
+                                <input type="number" step="0.1" id="s-sacks" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+
+                            <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Custom Rules</h3>
+                            <div class="setting-row">
+                                <label>Team Loss Bonus</label>
+                                <input type="number" step="0.1" id="s-team-loss" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
+                            <div class="setting-row">
+                                <label>Golden Penalty (No Pass Attempts)</label>
+                                <input type="number" step="0.1" id="s-no-att" class="form-input" style="width: 100px; text-align: right;">
+                            </div>
                         </div>
                         <button type="submit" class="btn btn-primary" style="width: 100%;">Save Settings</button>
                     </form>

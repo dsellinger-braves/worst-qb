@@ -5,6 +5,7 @@ from supabase import create_client, Client
 import requests
 from bs4 import BeautifulSoup
 import re
+import argparse
 
 def calculate_worst_qb_score(row):
     """
@@ -102,7 +103,11 @@ def scrape_cbs_projections(year, current_week):
         return []
 
 def main():
-    print("Starting Worst QB Live Stats Scraper...")
+    parser = argparse.ArgumentParser(description="Worst QB Live Stats Scraper")
+    parser.add_argument('--year', type=int, default=2023, help="NFL Season Year to scrape (e.g. 2021)")
+    args = parser.parse_args()
+    
+    print(f"Starting Worst QB Stats Scraper for {args.year}...")
     
     url: str = os.environ.get("SUPABASE_URL")
     key: str = os.environ.get("SUPABASE_SERVICE_KEY")
@@ -112,7 +117,7 @@ def main():
         
     supabase: Client = create_client(url, key)
     
-    year = 2023
+    year = args.year
     print("Fetching Roster, Weekly Data, and Schedules...")
     try:
         weekly_data = nfl.import_weekly_data([year])
