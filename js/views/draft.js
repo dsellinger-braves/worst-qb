@@ -337,7 +337,7 @@ export const DraftView = {
         if (activeTab === 'QB') {
             available = available.filter(p => p.position === 'QB' || p.position === 'TM_QB');
         } else {
-            available = available.filter(p => p.position !== 'QB' && p.position !== 'TM_QB');
+            available = available.filter(p => p.position !== 'QB' && p.position !== 'TM_QB' && p.position !== 'DST');
         }
 
         // Apply Search
