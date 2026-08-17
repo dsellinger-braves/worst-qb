@@ -66,7 +66,23 @@ ESPN_TEAM_MAP = {
 }
 
 ESPN_POS_MAP = {
-    1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST'
+    1: 'QB',
+    2: 'RB',
+    3: 'WR',
+    4: 'TE',
+    5: 'K',
+    16: 'DST'
+}
+
+ESPN_SLOT_MAP = {
+    0: 'QB',
+    2: 'RB',
+    4: 'WR',
+    6: 'TE',
+    17: 'K',
+    16: 'DST',
+    7: 'OP',
+    23: 'FLEX'
 }
 
 def scrape_espn_projections(year, current_week):
@@ -94,7 +110,17 @@ def scrape_espn_projections(year, current_week):
             pro_team_id = player.get('proTeamId', 0)
             team = ESPN_TEAM_MAP.get(pro_team_id, 'FA')
             pos_id = player.get('defaultPositionId', 0)
-            pos_label = ESPN_POS_MAP.get(pos_id, 'FLEX')
+            
+            slots = player.get('eligibleSlots', [])
+            pos_labels = []
+            for s in slots:
+                if s in ESPN_SLOT_MAP:
+                    pos_labels.append(ESPN_SLOT_MAP[s])
+                    
+            if not pos_labels:
+                pos_labels = [ESPN_POS_MAP.get(pos_id, 'FLEX')]
+                
+            pos_label = "/".join(pos_labels)
             
             # Always add player to our list to be saved to DB
             espn_player = {

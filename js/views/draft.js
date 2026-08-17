@@ -36,8 +36,8 @@ export const DraftView = {
                         <table style="width: 100%; border-collapse: collapse; text-align: left; min-width: 500px;">
                             <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 10;">
                                 <tr style="border-bottom: 2px solid var(--glass-border);">
-                                    <th style="padding: 1rem 1.5rem;">Player</th>
-                                    <th style="padding: 1rem 1.5rem;">Proj Pts</th>
+                                    <th style="padding: 1rem 1.5rem; cursor: pointer; user-select: none;" onclick="DraftView.setSort('name')">Player <span style="font-size: 0.8rem; opacity: 0.5;">↕</span></th>
+                                    <th style="padding: 1rem 1.5rem; cursor: pointer; user-select: none;" onclick="DraftView.setSort('pts')">Proj Pts <span style="font-size: 0.8rem; opacity: 0.5;">↕</span></th>
                                     <th style="padding: 1rem 1.5rem; text-align: center;">Action</th>
                                 </tr>
                             </thead>
@@ -120,7 +120,9 @@ export const DraftView = {
             players: [],
             projections: {},
             searchQuery: '',
-            activeTab: 'QB'
+            activeTab: 'QB',
+            sortCol: 'name',
+            sortAsc: true
         };
 
         const { data: { session } } = await supabase.auth.getSession();
@@ -210,6 +212,18 @@ export const DraftView = {
                     statusEl.style.color = 'var(--accent-primary)';
                 }
             });
+            
+        window.DraftView = DraftView; // Expose for header sorting
+    },
+
+    setSort: (col) => {
+        if (DraftView.state.sortCol === col) {
+            DraftView.state.sortAsc = !DraftView.state.sortAsc;
+        } else {
+            DraftView.state.sortCol = col;
+            DraftView.state.sortAsc = col === 'name';
+        }
+        DraftView.renderPlayerPool();
     },
 
     loadLeagueData: async () => {
@@ -370,9 +384,9 @@ export const DraftView = {
 
         // Apply Tab Filter
         if (activeTab === 'QB') {
-            available = available.filter(p => p.position === 'QB' || p.position === 'TM_QB');
+            available = available.filter(p => p.position && p.position.includes('QB'));
         } else {
-            available = available.filter(p => p.position !== 'QB' && p.position !== 'TM_QB' && p.position !== 'DST');
+            available = available.filter(p => p.position && !p.position.includes('QB') && !p.position.includes('DST'));
         }
 
         // Apply Search
@@ -383,8 +397,22 @@ export const DraftView = {
             );
         }
 
-        // Sort by projected points descending
-        available.sort((a, b) => (projections[b.id] || 0) - (projections[a.id] || 0));
+        // Apply Sort
+        available.sort((a, b) => {
+            if (DraftView.state.sortCol === 'pts') {
+                const pA = projections[a.id] || 0;
+                const pB = projections[b.id] || 0;
+                return DraftView.state.sortAsc ? pA - pB : pB - pA;
+            } else {
+                // Sort by last name
+                const getLastName = (name) => {
+                    const parts = name.trim().split(' ');
+                    return parts[parts.length - 1].toLowerCase();
+                };
+                const comp = getLastName(a.name).localeCompare(getLastName(b.name));
+                return DraftView.state.sortAsc ? comp : -comp;
+            }
+        });
 
         if (available.length === 0) {
             tbody.innerHTML = '<tr><td colspan="3" style="padding: 2rem; text-align: center;">No available players match your search.</td></tr>';
