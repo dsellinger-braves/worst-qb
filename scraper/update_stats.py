@@ -42,64 +42,90 @@ def calculate_worst_qb_score(row):
     
     return round(score, 2)
 
-def scrape_cbs_projections(year, current_week):
-    print("Scraping CBS Projections...")
-    url = f"https://www.cbssports.com/fantasy/football/stats/QB/{year}/season/projections/nonppr/"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+def fuzzy_match_player(name, db_players):
+    name_lower = name.lower().replace('.', '').replace('-', ' ')
+    # Try exact match
+    for p in db_players:
+        if p['name'].lower().replace('.', '').replace('-', ' ') == name_lower:
+            return p['id']
+    
+    # Try last name + initial
+    for p in db_players:
+        db_parts = p['name'].lower().split()
+        csv_parts = name_lower.split()
+        if len(db_parts) > 1 and len(csv_parts) > 1:
+            if db_parts[-1] == csv_parts[-1] and db_parts[0][0] == csv_parts[0][0]:
+                return p['id']
+    return None
+
+ESPN_TEAM_MAP = {
+    0: 'FA', 1: 'ATL', 2: 'BUF', 3: 'CHI', 4: 'CIN', 5: 'CLE', 6: 'DAL', 7: 'DEN',
+    8: 'DET', 9: 'GB', 10: 'TEN', 11: 'IND', 12: 'KC', 13: 'LV', 14: 'LAR', 15: 'MIA',
+    16: 'MIN', 17: 'NE', 18: 'NO', 19: 'NYG', 20: 'NYJ', 21: 'PHI', 22: 'ARI', 23: 'PIT',
+    24: 'LAC', 25: 'SF', 26: 'SEA', 27: 'TB', 28: 'WAS', 29: 'CAR', 30: 'JAX', 33: 'BAL', 34: 'HOU'
+}
+
+def scrape_espn_projections(year, current_week):
+    print("Scraping ESPN Projections...")
+    import urllib.request
+    import json
+    
+    url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}/segments/0/leaguedefaults/3?view=kona_player_info&platformVersion=03952a53323901871b54cebc123891a6966b3143"
+    
+    # We want EligibleSlot = 7 (QB/OP)
+    headers = {
+        'X-Fantasy-Filter': '{"players":{"filterSlotIds":{"value":[7]},"sortPercOwned":{"sortPriority":1,"sortAsc":false},"limit":150}}',
+        'User-Agent': 'Mozilla/5.0'
+    }
+    
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(resp.text, 'html.parser')
+        req = urllib.request.Request(url, headers=headers)
+        res = urllib.request.urlopen(req)
+        data = json.loads(res.read())
         
-        rows = soup.find_all('tr', class_='TableBase-bodyTr')
         projections = []
-        for row in rows:
-            cols = row.find_all('td')
-            if len(cols) < 11:
-                continue
+        for p_data in data.get('players', []):
+            player = p_data.get('player', {})
+            name = player.get('fullName')
+            pro_team_id = player.get('proTeamId', 0)
+            team = ESPN_TEAM_MAP.get(pro_team_id, 'FA')
             
-            name_cell = cols[0].find('a')
-            if not name_cell:
-                continue
-            name = name_cell.text.strip()
+            # Find the projected stats (statSourceId = 1, statSplitTypeId = 1)
+            stats = p_data.get('stats', [])
+            proj_stats = {}
+            for s in stats:
+                if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1 and s.get('scoringPeriodId') == current_week:
+                    proj_stats = s.get('stats', {})
+                    break
+                    
+            # ESPN Stat ID mapping to our format
+            stats_dict = {
+                'attempts': float(proj_stats.get('0', 0)),
+                'completions': float(proj_stats.get('1', 0)),
+                'passing_yards': float(proj_stats.get('3', 0)),
+                'passing_tds': float(proj_stats.get('4', 0)),
+                'interceptions': float(proj_stats.get('20', 0)),
+                'pick_sixes': 0,
+                'rushing_yards': float(proj_stats.get('24', 0)),
+                'rushing_tds': float(proj_stats.get('25', 0)),
+                'fumbles_lost': float(proj_stats.get('72', 0)),
+                'sacks': 0, # Sacks typically aren't projected
+                'team_loss': False
+            }
             
-            try:
-                vals = [c.text.strip() for c in cols]
-                att = float(vals[1])
-                cmp = float(vals[2])
-                p_yds = float(vals[3])
-                p_td = float(vals[4])
-                p_int = float(vals[5])
-                r_yds = float(vals[8])
-                r_td = float(vals[9])
-                fl = float(vals[10])
-                
-                # Convert season to weekly (divide by 17)
-                stats = {
-                    'attempts': att / 17,
-                    'completions': cmp / 17,
-                    'passing_yards': p_yds / 17,
-                    'passing_tds': p_td / 17,
-                    'interceptions': p_int / 17,
-                    'pick_sixes': 0,
-                    'rushing_yards': r_yds / 17,
-                    'rushing_tds': r_td / 17,
-                    'fumbles_lost': fl / 17,
-                    'sacks': 0,
-                    'team_loss': False
-                }
-                
-                custom_pts = calculate_worst_qb_score(stats)
-                projections.append({
-                    'name': name,
-                    'projected_custom_points': float(custom_pts),
-                    'week': current_week
-                })
-            except Exception as e:
-                pass
-                
+            custom_pts = calculate_worst_qb_score(stats_dict)
+            projections.append({
+                'id': f"espn-{player.get('id')}",
+                'name': name,
+                'team': team,
+                'projected_custom_points': float(custom_pts),
+                'week': current_week
+            })
+            
+        print(f"Found {len(projections)} projections from ESPN.")
         return projections
     except Exception as e:
-        print(f"Error scraping CBS: {e}")
+        print(f"Error scraping ESPN: {e}")
         return []
 
 def main():
@@ -125,7 +151,9 @@ def main():
         schedules = nfl.import_schedules([year])
     except Exception as e:
         print(f"Error fetching NFL data: {e}")
-        return
+        weekly_data = pd.DataFrame()
+        rosters = pd.DataFrame()
+        schedules = pd.DataFrame()
         
     def did_team_lose(team, week):
         game = schedules[(schedules['week'] == week) & ((schedules['home_team'] == team) | (schedules['away_team'] == team))]
@@ -138,14 +166,11 @@ def main():
         else:
             return g['away_score'] < g['home_score']
         
-    if weekly_data.empty:
-        print("No data available for the given year.")
-        return
-        
-    # Filter for Quarterbacks
-    qbs = weekly_data[weekly_data['position'] == 'QB'].copy()
-    
     records_to_upsert = []
+    if weekly_data.empty:
+        qbs = pd.DataFrame()
+    else:
+        qbs = weekly_data[weekly_data['position'] == 'QB'].copy()
     
     for index, row in qbs.iterrows():
         player_id = row['player_id']
@@ -313,7 +338,7 @@ def main():
             
     # Upsert Projections
     current_week = int(weekly_data['week'].max() + 1) if not weekly_data.empty else 1
-    projections_data = scrape_cbs_projections(year, current_week)
+    projections_data = scrape_espn_projections(year, current_week)
     if projections_data:
         try:
             db_players = supabase.table('players').select('id, name').execute().data
@@ -324,31 +349,43 @@ def main():
                 name_to_id[p['name'].lower()] = p['id']
                 # also map last names for easier matching (e.g. "P. Mahomes" -> "Mahomes")
                 parts = p['name'].split(' ')
-                if len(parts) > 1:
-                    name_to_id[parts[-1].lower()] = p['id']
-                    
-            proj_to_upsert = []
-            for p in projections_data:
-                # Try exact
-                pid = name_to_id.get(p['name'].lower())
-                # Try last name
-                if not pid:
-                    parts = p['name'].split(' ')
-                    pid = name_to_id.get(parts[-1].lower())
-                    
-                if pid:
-                    proj_to_upsert.append({
-                        'player_id': pid,
-                        'week': p['week'],
-                        'projected_custom_points': p['projected_custom_points'],
-                        'opponent': 'TBD'
-                    })
-                    
-            if proj_to_upsert:
-                supabase.table('player_projections').upsert(proj_to_upsert).execute()
-                print(f"Projections updated successfully for {len(proj_to_upsert)} players!")
-        except Exception as e:
-            print(f"Error updating projections: {e}")
+            new_players = []
+            proj_records = []
             
+            for p in projections_data:
+                pid = fuzzy_match_player(p['name'], db_players)
+                if not pid:
+                    # New player, insert them into DB
+                    pid = p['id']
+                    new_players.append({
+                        'id': pid,
+                        'name': p['name'],
+                        'team': p['team'],
+                        'position': 'QB',
+                        'status': 'active'
+                    })
+                    # Add to db_players locally so we don't duplicate
+                    db_players.append({'id': pid, 'name': p['name']})
+                
+                proj_records.append({
+                    'player_id': pid,
+                    'week': p['week'],
+                    'projected_custom_points': p['projected_custom_points']
+                })
+                
+            if new_players:
+                print(f"Adding {len(new_players)} new players from ESPN to database...")
+                supabase.table('players').upsert(new_players, on_conflict='id').execute()
+
+            if proj_records:
+                unique_projs = { (pr['player_id'], pr['week']): pr for pr in proj_records }.values()
+                print(f"Upserting {len(unique_projs)} projections...")
+                supabase.table('player_projections').upsert(list(unique_projs), on_conflict='player_id,week').execute()
+                print("Projections updated successfully!")
+        except Exception as e:
+            print(f"Error updating Supabase projections: {e}")
+            
+    print("Worst QB Stats Scraper finished.")
+
 if __name__ == '__main__':
     main()
