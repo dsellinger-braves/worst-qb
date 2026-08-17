@@ -94,12 +94,12 @@ export const DraftView = {
 
         // Apply media query dynamically for layout
         const style = document.createElement('style');
-        style.innerHTML = \`
+        style.innerHTML = `
             @media(min-width: 900px) {
                 #draft-grid { grid-template-columns: 3fr 1fr !important; }
             }
             .player-row:hover { background: rgba(255,255,255,0.05); }
-        \`;
+        `;
         document.head.appendChild(style);
         
         // Setup state
@@ -138,7 +138,7 @@ export const DraftView = {
         }
 
         selectEl.innerHTML = userLeagues.map(ul => 
-            \`<option value="\${ul.league_id}">\${ul.leagues?.name} (\${ul.leagues?.scoring_type === 'team_qb' ? 'Team' : 'Indiv'})</option>\`
+            `<option value="${ul.league_id}">${ul.leagues?.name} (${ul.leagues?.scoring_type === 'team_qb' ? 'Team' : 'Indiv'})</option>`
         ).join('');
 
         // Modal Handlers
@@ -258,12 +258,12 @@ export const DraftView = {
 
         const renderSlot = (slotEl, pickLabel, pickData) => {
             if (pickData) {
-                slotEl.innerHTML = \`<span style="font-weight: bold;">\${pickLabel}</span><br/><span style="color: var(--accent-success); font-weight: 600;">\${pickData.players?.name}</span>\`;
+                slotEl.innerHTML = `<span style="font-weight: bold;">${pickLabel}</span><br/><span style="color: var(--accent-success); font-weight: 600;">${pickData.players?.name}</span>`;
                 slotEl.style.borderStyle = 'solid';
                 slotEl.style.borderColor = 'var(--accent-success)';
                 slotEl.style.background = 'rgba(16, 185, 129, 0.1)';
             } else {
-                slotEl.innerHTML = \`<span style="font-weight: bold;">\${pickLabel}</span><br/><span style="font-size: 0.8rem; color: var(--text-secondary)">Empty</span>\`;
+                slotEl.innerHTML = `<span style="font-weight: bold;">${pickLabel}</span><br/><span style="font-size: 0.8rem; color: var(--text-secondary)">Empty</span>`;
                 slotEl.style.borderStyle = 'dashed';
                 slotEl.style.borderColor = 'var(--glass-border)';
                 slotEl.style.background = 'transparent';
@@ -288,18 +288,18 @@ export const DraftView = {
             const theirPicks = (allPicks || []).filter(p => p.user_id === m.user_id);
             const statusIcon = theirPicks.length >= 2 ? '✅' : (theirPicks.length === 1 ? '⏳' : '❌');
             
-            return \`
+            return `
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
                 <div>
-                    <span style="font-weight: bold; color: var(--text-secondary); margin-right: 0.5rem;">\${idx + 1}.</span>
-                    <span>\${m.team_name}</span>
+                    <span style="font-weight: bold; color: var(--text-secondary); margin-right: 0.5rem;">${idx + 1}.</span>
+                    <span>${m.team_name}</span>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">\${m.season_points.toFixed(2)} pts</span>
-                    <span title="\${theirPicks.length} / 2 picks made">\${statusIcon}</span>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">${m.season_points.toFixed(2)} pts</span>
+                    <span title="${theirPicks.length} / 2 picks made">${statusIcon}</span>
                 </div>
             </div>
-        \`}).join('');
+        `}).join('');
     },
 
     renderPlayerPool: () => {
@@ -335,30 +335,30 @@ export const DraftView = {
         tbody.innerHTML = available.map(p => {
             const proj = projections[p.id] ? projections[p.id].toFixed(2) : 'N/A';
             const headshotHtml = p.headshot_url 
-                ? \`<img src="\${p.headshot_url}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #fff; border: 1px solid var(--glass-border);">\`
-                : \`<div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">🏈</div>\`;
+                ? `<img src="${p.headshot_url}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #fff; border: 1px solid var(--glass-border);">`
+                : `<div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">🏈</div>`;
 
-            return \`
+            return `
             <tr class="player-row" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;">
                 <td style="padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem;">
-                    \${headshotHtml}
+                    ${headshotHtml}
                     <div style="display: flex; flex-direction: column;">
-                        <a href="javascript:void(0)" onclick="openProfile('\${p.id}')" style="color: var(--text-primary); text-decoration: none; font-weight: 600; font-size: 1.1rem;">\${p.name}</a>
-                        <span style="font-size: 0.8rem; color: var(--text-secondary);">\${p.position} - \${p.team || 'FA'}</span>
+                        <a href="javascript:void(0)" onclick="openProfile('${p.id}')" style="color: var(--text-primary); text-decoration: none; font-weight: 600; font-size: 1.1rem;">${p.name}</a>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">${p.position} - ${p.team || 'FA'}</span>
                     </div>
                 </td>
                 <td style="padding: 1rem 1.5rem; font-weight: bold; color: var(--accent-primary);">
-                    \${proj}
+                    ${proj}
                 </td>
                 <td style="padding: 1rem 1.5rem; text-align: center;">
-                    <button class="btn \${canDraft ? 'btn-primary' : ''}" \${!canDraft ? 'disabled' : ''} 
-                            style="\${!canDraft ? 'background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;' : ''}"
-                            onclick="draftPlayer('\${p.id}')">
-                        \${canDraft ? '+ Draft' : 'Full'}
+                    <button class="btn ${canDraft ? 'btn-primary' : ''}" ${!canDraft ? 'disabled' : ''} 
+                            style="${!canDraft ? 'background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;' : ''}"
+                            onclick="draftPlayer('${p.id}')">
+                        ${canDraft ? '+ Draft' : 'Full'}
                     </button>
                 </td>
             </tr>
-        \`}).join('');
+        `}).join('');
     },
 
     draftPlayer: async (playerId) => {
