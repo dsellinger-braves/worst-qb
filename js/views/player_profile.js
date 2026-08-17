@@ -17,26 +17,55 @@ export const PlayerProfileView = {
             </div>
             
             <div class="glass-panel">
-                <h2>Game Log</h2>
-                <div style="margin-top: 1.5rem; overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid var(--glass-border);">
-                                <th style="padding: 1rem 0.5rem;">Week</th>
-                                <th style="padding: 1rem 0.5rem;">Comp/Att</th>
-                                <th style="padding: 1rem 0.5rem;">Pass Yds</th>
-                                <th style="padding: 1rem 0.5rem;">Pass TD</th>
-                                <th style="padding: 1rem 0.5rem;">INT</th>
-                                <th style="padding: 1rem 0.5rem;">Sacks</th>
-                                <th style="padding: 1rem 0.5rem;">Fumbles</th>
-                                <th style="padding: 1rem 0.5rem;">Result</th>
-                                <th style="padding: 1rem 0.5rem; color: var(--accent-primary);">Fantasy Pts</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pp-gamelog">
-                            <tr><td colspan="9" style="text-align: center; padding: 2rem;">Loading game log...</td></tr>
-                        </tbody>
-                    </table>
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--glass-border); padding-bottom: 1rem;">
+                    <button class="btn btn-primary" id="tab-gamelog" onclick="switchProfileTab('gamelog')">Historical Game Logs</button>
+                    <button class="btn" id="tab-projections" onclick="switchProfileTab('projections')" style="background: rgba(255,255,255,0.1); color: var(--text-secondary);">2026 Projections</button>
+                </div>
+
+                <div id="view-gamelog">
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid var(--glass-border);">
+                                    <th style="padding: 1rem 0.5rem;">Week</th>
+                                    <th style="padding: 1rem 0.5rem;">Comp/Att</th>
+                                    <th style="padding: 1rem 0.5rem;">Pass Yds</th>
+                                    <th style="padding: 1rem 0.5rem;">Pass TD</th>
+                                    <th style="padding: 1rem 0.5rem;">INT</th>
+                                    <th style="padding: 1rem 0.5rem;">Sacks</th>
+                                    <th style="padding: 1rem 0.5rem;">Fumbles</th>
+                                    <th style="padding: 1rem 0.5rem;">Result</th>
+                                    <th style="padding: 1rem 0.5rem; color: var(--accent-primary);">Fantasy Pts</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pp-gamelog">
+                                <tr><td colspan="9" style="text-align: center; padding: 2rem;">Loading game log...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="view-projections" style="display: none;">
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid var(--glass-border);">
+                                    <th style="padding: 1rem 0.5rem;">Week</th>
+                                    <th style="padding: 1rem 0.5rem;">Comp/Att</th>
+                                    <th style="padding: 1rem 0.5rem;">Pass Yds</th>
+                                    <th style="padding: 1rem 0.5rem;">Pass TD</th>
+                                    <th style="padding: 1rem 0.5rem;">INT</th>
+                                    <th style="padding: 1rem 0.5rem;">Rush Yds</th>
+                                    <th style="padding: 1rem 0.5rem;">Rush TD</th>
+                                    <th style="padding: 1rem 0.5rem;">Fumbles</th>
+                                    <th style="padding: 1rem 0.5rem; color: var(--accent-primary);">Proj Pts</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pp-projections">
+                                <tr><td colspan="9" style="text-align: center; padding: 2rem;">Loading projections...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -145,5 +174,63 @@ export const PlayerProfileView = {
                 <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${totals.pts.toFixed(2)}</td>
             </tr>
         `;
+
+        // Fetch Projections
+        const { data: projections, error: projErr } = await supabase.from('player_projections')
+            .select('*')
+            .eq('player_id', player.id || playerId)
+            .order('week', { ascending: true });
+            
+        const projTbody = document.getElementById('pp-projections');
+        
+        if (projErr || !projections || projections.length === 0) {
+            projTbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem;">No projections available.</td></tr>`;
+        } else {
+            projTbody.innerHTML = projections.map(p => {
+                let raw = {};
+                try {
+                    if (p.opponent && p.opponent.startsWith('{')) {
+                        raw = JSON.parse(p.opponent).raw || {};
+                    }
+                } catch(e) {}
+                
+                // If there are no projections for this week (e.g. bye week), skip or show empty
+                if (Object.keys(raw).length === 0 && p.projected_custom_points === 0) {
+                    return `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 1rem 0.5rem; font-weight: bold;">${p.week}</td>
+                        <td colspan="8" style="padding: 1rem 0.5rem; color: var(--text-secondary); text-align: center;">BYE</td>
+                    </tr>
+                    `;
+                }
+                
+                const pts = leagueSettings ? calculateLeagueScore(raw, leagueSettings) : p.projected_custom_points;
+                
+                return `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding: 1rem 0.5rem; font-weight: bold;">${p.week}</td>
+                    <td style="padding: 1rem 0.5rem;">${(raw.completions || 0).toFixed(1)} / ${(raw.attempts || 0).toFixed(1)}</td>
+                    <td style="padding: 1rem 0.5rem;">${(raw.passing_yards || 0).toFixed(1)}</td>
+                    <td style="padding: 1rem 0.5rem;">${(raw.passing_tds || 0).toFixed(1)}</td>
+                    <td style="padding: 1rem 0.5rem;">${(raw.interceptions || 0).toFixed(1)}</td>
+                    <td style="padding: 1rem 0.5rem;">${(raw.rushing_yards || 0).toFixed(1)}</td>
+                    <td style="padding: 1rem 0.5rem;">${(raw.rushing_tds || 0).toFixed(1)}</td>
+                    <td style="padding: 1rem 0.5rem;">${(raw.fumbles_lost || 0).toFixed(1)}</td>
+                    <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${pts.toFixed(2)}</td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        window.switchProfileTab = (tab) => {
+            document.getElementById('view-gamelog').style.display = tab === 'gamelog' ? 'block' : 'none';
+            document.getElementById('view-projections').style.display = tab === 'projections' ? 'block' : 'none';
+            
+            document.getElementById('tab-gamelog').className = tab === 'gamelog' ? 'btn btn-primary' : 'btn';
+            document.getElementById('tab-gamelog').style = tab === 'gamelog' ? '' : 'background: rgba(255,255,255,0.1); color: var(--text-secondary);';
+            
+            document.getElementById('tab-projections').className = tab === 'projections' ? 'btn btn-primary' : 'btn';
+            document.getElementById('tab-projections').style = tab === 'projections' ? '' : 'background: rgba(255,255,255,0.1); color: var(--text-secondary);';
+        };
     }
 };

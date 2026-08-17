@@ -156,9 +156,18 @@ def scrape_espn_projections(year, current_week):
                     }
                     
                     custom_pts = calculate_worst_qb_score(stats_dict)
+                    
+                    # Store raw stats in opponent column as a JSON string since we can't alter schema
+                    import json
+                    opp_payload = json.dumps({
+                        'opp': 'TBD',
+                        'raw': stats_dict
+                    })
+                    
                     player_projections.append({
                         'projected_custom_points': float(custom_pts),
-                        'week': week
+                        'week': week,
+                        'opponent': opp_payload
                     })
                     
             projections.append({
@@ -433,7 +442,8 @@ def main():
                         proj_records.append({
                             'player_id': pid,
                             'week': proj['week'],
-                            'projected_custom_points': proj['projected_custom_points']
+                            'projected_custom_points': proj['projected_custom_points'],
+                            'opponent': proj.get('opponent', None)
                         })
                 
             if new_players:
