@@ -80,9 +80,7 @@ ESPN_SLOT_MAP = {
     4: 'WR',
     6: 'TE',
     17: 'K',
-    16: 'DST',
-    7: 'OP',
-    23: 'FLEX'
+    16: 'DST'
 }
 
 def scrape_espn_projections(year, current_week):
