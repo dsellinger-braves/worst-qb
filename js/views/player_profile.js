@@ -22,6 +22,7 @@ export const PlayerProfileView = {
                         <thead>
                             <tr style="border-bottom: 2px solid var(--glass-border);">
                                 <th style="padding: 1rem 0.5rem;">Week</th>
+                                <th style="padding: 1rem 0.5rem;">Result</th>
                                 <th style="padding: 1rem 0.5rem;">Comp/Att</th>
                                 <th style="padding: 1rem 0.5rem;">Pass Yds</th>
                                 <th style="padding: 1rem 0.5rem;">Pass TD</th>
@@ -32,7 +33,7 @@ export const PlayerProfileView = {
                             </tr>
                         </thead>
                         <tbody id="pp-gamelog">
-                            <tr><td colspan="8" style="text-align: center; padding: 2rem;">Loading game log...</td></tr>
+                            <tr><td colspan="9" style="text-align: center; padding: 2rem;">Loading game log...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -83,13 +84,14 @@ export const PlayerProfileView = {
         const tbody = document.getElementById('pp-gamelog');
         
         if (sErr || !stats || stats.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem;">No games played yet.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem;">No games played yet.</td></tr>`;
             return;
         }
 
         tbody.innerHTML = stats.map(s => `
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${s.week}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">${s.team_loss ? '<span style="color: var(--accent-primary)">L</span>' : '<span style="color: var(--accent-success)">W</span>'}</td>
                 <td style="padding: 1rem 0.5rem;">${s.completions || 0} / ${s.attempts || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.passing_yards || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.passing_tds || 0}</td>
@@ -116,6 +118,7 @@ export const PlayerProfileView = {
         tbody.innerHTML += `
             <tr style="background: rgba(255,255,255,0.05); border-top: 2px solid var(--glass-border);">
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">Total</td>
+                <td style="padding: 1rem 0.5rem;">-</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.comp} / ${totals.att}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.yds}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.tds}</td>
