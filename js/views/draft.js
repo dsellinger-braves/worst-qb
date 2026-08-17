@@ -389,6 +389,11 @@ export const DraftView = {
             available = available.filter(p => p.position && !p.position.includes('QB') && !p.position.includes('DST'));
         }
 
+        // Filter out TM_QB if individual scoring
+        if (DraftView.state.scoringType === 'individual') {
+            available = available.filter(p => !p.position || !p.position.includes('TM_QB'));
+        }
+
         // Apply Search
         if (searchQuery) {
             available = available.filter(p => 
@@ -577,6 +582,14 @@ export const DraftView = {
         
         modal.style.display = 'flex';
         content.innerHTML = '<div style="padding: 4rem; text-align: center;"><div class="spinner" style="margin: 0 auto;"></div><p>Loading Profile...</p></div>';
+
+        const escapeListener = (e) => {
+            if (e.key === 'Escape') {
+                modal.style.display = 'none';
+                document.removeEventListener('keydown', escapeListener);
+            }
+        };
+        document.addEventListener('keydown', escapeListener);
 
         // Render the PlayerProfileView into the modal container
         content.innerHTML = PlayerProfileView.render();

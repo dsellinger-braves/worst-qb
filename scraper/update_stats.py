@@ -131,7 +131,7 @@ def scrape_espn_projections(year, current_week):
             player_projections = []
             
             # Find the projected stats for all weeks (statSourceId = 1, statSplitTypeId = 1)
-            stats = p_data.get('stats', [])
+            stats = player.get('stats', [])
             for s in stats:
                 if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1:
                     week = s.get('scoringPeriodId')
