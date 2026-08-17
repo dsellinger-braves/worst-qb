@@ -65,16 +65,20 @@ ESPN_TEAM_MAP = {
     24: 'LAC', 25: 'SF', 26: 'SEA', 27: 'TB', 28: 'WAS', 29: 'CAR', 30: 'JAX', 33: 'BAL', 34: 'HOU'
 }
 
+ESPN_POS_MAP = {
+    1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST'
+}
+
 def scrape_espn_projections(year, current_week):
-    print("Scraping ESPN Projections...")
+    print("Scraping ESPN Projections (All Players)...")
     import urllib.request
     import json
     
     url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}/segments/0/leaguedefaults/3?view=kona_player_info&platformVersion=03952a53323901871b54cebc123891a6966b3143"
     
-    # We want EligibleSlot = 7 (QB/OP)
+    # Remove filterSlotIds and limit to grab every player
     headers = {
-        'X-Fantasy-Filter': '{"players":{"filterSlotIds":{"value":[7]},"sortPercOwned":{"sortPriority":1,"sortAsc":false},"limit":150}}',
+        'X-Fantasy-Filter': '{"players":{"sortPercOwned":{"sortPriority":1,"sortAsc":false}}}',
         'User-Agent': 'Mozilla/5.0'
     }
     
@@ -89,11 +93,23 @@ def scrape_espn_projections(year, current_week):
             name = player.get('fullName')
             pro_team_id = player.get('proTeamId', 0)
             team = ESPN_TEAM_MAP.get(pro_team_id, 'FA')
+            pos_id = player.get('defaultPositionId', 0)
+            pos_label = ESPN_POS_MAP.get(pos_id, 'FLEX')
+            
+            # Always add player to our list to be saved to DB
+            espn_player = {
+                'id': f"espn-{player.get('id')}",
+                'name': name,
+                'team': team,
+                'position': pos_label,
+            }
+            
+            player_projections = []
             
             # Find the projected stats for all weeks (statSourceId = 1, statSplitTypeId = 1)
             stats = p_data.get('stats', [])
             for s in stats:
-                if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1 and s.get('seasonId') == year:
+                if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1:
                     week = s.get('scoringPeriodId')
                     proj_stats = s.get('stats', {})
                     
@@ -116,15 +132,17 @@ def scrape_espn_projections(year, current_week):
                     }
                     
                     custom_pts = calculate_worst_qb_score(stats_dict)
-                    projections.append({
-                        'id': f"espn-{player.get('id')}",
-                        'name': name,
-                        'team': team,
+                    player_projections.append({
                         'projected_custom_points': float(custom_pts),
                         'week': week
                     })
+                    
+            projections.append({
+                'player': espn_player,
+                'projections': player_projections
+            })
             
-        print(f"Found {len(projections)} projections from ESPN.")
+        print(f"Found {len(projections)} players from ESPN.")
         return projections
     except Exception as e:
         print(f"Error scraping ESPN: {e}")
@@ -354,26 +372,36 @@ def main():
             new_players = []
             proj_records = []
             
-            for p in projections_data:
-                pid = fuzzy_match_player(p['name'], db_players)
+            for p_data in projections_data:
+                player_info = p_data['player']
+                pid = fuzzy_match_player(player_info['name'], db_players)
                 if not pid:
                     # New player, insert them into DB
-                    pid = p['id']
+                    pid = player_info['id']
                     new_players.append({
                         'id': pid,
-                        'name': p['name'],
-                        'team': p['team'],
-                        'position': 'QB',
+                        'name': player_info['name'],
+                        'team': player_info['team'],
+                        'position': player_info['position'],
                         'status': 'active'
                     })
                     # Add to db_players locally so we don't duplicate
-                    db_players.append({'id': pid, 'name': p['name']})
+                    db_players.append({'id': pid, 'name': player_info['name']})
                 
-                proj_records.append({
-                    'player_id': pid,
-                    'week': p['week'],
-                    'projected_custom_points': p['projected_custom_points']
-                })
+                # If they have no projections, we at least want a baseline 0 for the current week so they show up
+                if not p_data['projections']:
+                    proj_records.append({
+                        'player_id': pid,
+                        'week': current_week,
+                        'projected_custom_points': 0.0
+                    })
+                else:
+                    for proj in p_data['projections']:
+                        proj_records.append({
+                            'player_id': pid,
+                            'week': proj['week'],
+                            'projected_custom_points': proj['projected_custom_points']
+                        })
                 
             if new_players:
                 print(f"Adding {len(new_players)} new players from ESPN to database...")

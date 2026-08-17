@@ -21,8 +21,14 @@ export const DraftView = {
                 
                 <!-- Left Column: Player Pool -->
                 <div class="glass-panel" style="padding: 0; overflow: hidden; display: flex; flex-direction: column;" id="pool-col">
-                    <div style="padding: 1.5rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                        <h3 style="margin: 0;">Player Pool</h3>
+                    <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                            <h3 style="margin: 0;">Player Pool</h3>
+                            <div style="display: flex; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 0.25rem;">
+                                <button class="btn pool-tab active-tab" data-tab="QB" style="padding: 0.5rem 1rem; border-radius: 6px; background: var(--accent-primary); border: none; font-size: 0.9rem;">Quarterbacks</button>
+                                <button class="btn pool-tab" data-tab="OTHER" style="padding: 0.5rem 1rem; border-radius: 6px; background: transparent; border: none; font-size: 0.9rem; color: var(--text-secondary);">Other Positions</button>
+                            </div>
+                        </div>
                         <input type="text" id="draft-search" placeholder="Search player or team..." style="padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.5); color: white; min-width: 200px;">
                     </div>
                     
@@ -113,7 +119,8 @@ export const DraftView = {
             myPicks: [],
             players: [],
             projections: {},
-            searchQuery: ''
+            searchQuery: '',
+            activeTab: 'QB'
         };
 
         const { data: { session } } = await supabase.auth.getSession();
@@ -152,6 +159,24 @@ export const DraftView = {
         document.getElementById('draft-search').addEventListener('input', (e) => {
             DraftView.state.searchQuery = e.target.value.toLowerCase();
             DraftView.renderPlayerPool();
+        });
+
+        // Tab Handlers
+        document.querySelectorAll('.pool-tab').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.pool-tab').forEach(b => {
+                    b.style.background = 'transparent';
+                    b.style.color = 'var(--text-secondary)';
+                    b.classList.remove('active-tab');
+                });
+                const clicked = e.target;
+                clicked.style.background = 'var(--accent-primary)';
+                clicked.style.color = 'white';
+                clicked.classList.add('active-tab');
+                
+                DraftView.state.activeTab = clicked.getAttribute('data-tab');
+                DraftView.renderPlayerPool();
+            });
         });
 
         // Listen for league changes
@@ -228,14 +253,12 @@ export const DraftView = {
     },
 
     fetchPlayers: async () => {
-        const { scoringType, currentWeek } = DraftView.state;
-        const playerPosition = scoringType === 'team_qb' ? 'TM_QB' : 'QB';
-
+        const { currentWeek } = DraftView.state;
         document.getElementById('qb-list').innerHTML = '<tr><td colspan="3" style="padding: 2rem; text-align: center;"><div class="spinner" style="margin: 0 auto;"></div></td></tr>';
 
-        // Fetch players and projections
+        // Fetch ALL players and projections
         const [{ data: players }, { data: projections }] = await Promise.all([
-            supabase.from('players').select('*').eq('position', playerPosition),
+            supabase.from('players').select('*'),
             supabase.from('player_projections').select('*').eq('week', currentWeek)
         ]);
         
@@ -304,11 +327,18 @@ export const DraftView = {
 
     renderPlayerPool: () => {
         const tbody = document.getElementById('qb-list');
-        let { players, projections, searchQuery, allPicks, myPicks } = DraftView.state;
+        let { players, projections, searchQuery, allPicks, myPicks, activeTab } = DraftView.state;
         
         // Filter out drafted players
         const draftedIds = new Set((allPicks || []).map(p => p.player_id));
         let available = players.filter(p => !draftedIds.has(p.id));
+
+        // Apply Tab Filter
+        if (activeTab === 'QB') {
+            available = available.filter(p => p.position === 'QB' || p.position === 'TM_QB');
+        } else {
+            available = available.filter(p => p.position !== 'QB' && p.position !== 'TM_QB');
+        }
 
         // Apply Search
         if (searchQuery) {
