@@ -1,140 +1,417 @@
 import { supabase } from '../supabase.js';
+import { calculateLeagueScore } from '../scoring.js';
+import { PlayerProfileView } from './player_profile.js';
 
 export const DraftView = {
     render: () => `
-        <div class="view-container active glass-panel">
-            <h1>Live Draft Room</h1>
-            <p>Select your 2 QBs for this week. Remember, you want the WORST performance!</p>
-            
-            <div style="margin-top: 1rem; display: flex; align-items: center; gap: 1rem;">
-                <label for="draft-league-select" style="font-weight: bold;">Drafting for League:</label>
-                <select id="draft-league-select" style="background: rgba(0,0,0,0.5); color: var(--text-primary); border: 1px solid var(--glass-border); padding: 0.5rem; border-radius: 4px; min-width: 200px;">
+        <div class="view-container active">
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
+                <div>
+                    <h1 style="margin-bottom: 0;">Draft Lobby</h1>
+                    <p style="color: var(--text-secondary);">Build the worst roster possible.</p>
+                </div>
+                <select id="draft-league-select" style="background: rgba(0,0,0,0.5); color: var(--text-primary); border: 1px solid var(--glass-border); padding: 0.5rem; border-radius: 4px; min-width: 250px; font-size: 1rem;">
                     <option value="">Loading leagues...</option>
                 </select>
             </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; margin-top: 2rem;">
-                <div class="draft-board" style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px;">
-                    <h3>Eligible QBs</h3>
-                    <div id="qb-list" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; max-height: 500px; overflow-y: auto;">
-                        <p>Loading players...</p>
+
+            <!-- Main Layout -->
+            <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start;" id="draft-grid">
+                
+                <!-- Left Column: Player Pool -->
+                <div class="glass-panel" style="padding: 0; overflow: hidden; display: flex; flex-direction: column;" id="pool-col">
+                    <div style="padding: 1.5rem; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <h3 style="margin: 0;">Player Pool</h3>
+                        <input type="text" id="draft-search" placeholder="Search player or team..." style="padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid var(--glass-border); background: rgba(0,0,0,0.5); color: white; min-width: 200px;">
+                    </div>
+                    
+                    <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left; min-width: 500px;">
+                            <thead style="position: sticky; top: 0; background: var(--bg-secondary); z-index: 10;">
+                                <tr style="border-bottom: 2px solid var(--glass-border);">
+                                    <th style="padding: 1rem 1.5rem;">Player</th>
+                                    <th style="padding: 1rem 1.5rem;">Proj Pts</th>
+                                    <th style="padding: 1rem 1.5rem; text-align: center;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qb-list">
+                                <tr><td colspan="3" style="padding: 2rem; text-align: center;">Loading players...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                
-                <div class="draft-status">
-                    <h3>Your Picks (Week <span id="draft-week">1</span>)</h3>
-                    <div id="your-picks" style="margin-top: 1rem; display: flex; gap: 1rem;">
-                        <div style="flex: 1; padding: 2rem; border: 2px dashed var(--glass-border); text-align: center; border-radius: 8px;">
-                            Pick 1 <br/> <span style="font-size: 0.8rem; color: var(--text-secondary)">Empty</span>
-                        </div>
-                        <div style="flex: 1; padding: 2rem; border: 2px dashed var(--glass-border); text-align: center; border-radius: 8px;">
-                            Pick 2 <br/> <span style="font-size: 0.8rem; color: var(--text-secondary)">Empty</span>
+
+                <!-- Right Column: Status & Order -->
+                <div style="display: flex; flex-direction: column; gap: 1rem;" id="status-col">
+                    
+                    <!-- Your Picks Sticky Block -->
+                    <div class="glass-panel" style="position: sticky; top: 100px; padding: 1.5rem;">
+                        <h3 style="margin-bottom: 1rem; color: var(--accent-primary); display: flex; justify-content: space-between; align-items: center;">
+                            Your Picks
+                            <span style="font-size: 0.9rem; color: var(--text-secondary); font-weight: normal; border: 1px solid var(--glass-border); padding: 0.2rem 0.5rem; border-radius: 4px;">Week <span id="draft-week">1</span></span>
+                        </h3>
+                        <div id="your-picks" style="display: flex; flex-direction: column; gap: 1rem;">
+                            <div id="pick-1-slot" style="padding: 1rem; border: 2px dashed var(--glass-border); text-align: center; border-radius: 8px; transition: all 0.3s ease;">
+                                <span style="font-weight: bold;">Pick 1</span><br/>
+                                <span style="font-size: 0.8rem; color: var(--text-secondary)">Empty</span>
+                            </div>
+                            <div id="pick-2-slot" style="padding: 1rem; border: 2px dashed var(--glass-border); text-align: center; border-radius: 8px; transition: all 0.3s ease;">
+                                <span style="font-weight: bold;">Pick 2</span><br/>
+                                <span style="font-size: 0.8rem; color: var(--text-secondary)">Empty</span>
+                            </div>
                         </div>
                     </div>
                     
-                    <h3 style="margin-top: 2rem;">Draft Order Tracker</h3>
-                    <p style="color: var(--accent-success); margin-top: 0.5rem;">Supabase Realtime Draft Sync Status: <span id="realtime-status">Connecting...</span></p>
+                    <!-- Draft Order Tracker -->
+                    <div class="glass-panel" style="padding: 1.5rem;">
+                        <h3 style="margin-bottom: 0.5rem;">Draft Order</h3>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Inverse Season Standings</p>
+                        <div id="draft-order-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; padding-right: 0.5rem;">
+                            Loading draft order...
+                        </div>
+                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--glass-border); font-size: 0.8rem; display: flex; align-items: center; justify-content: space-between;">
+                            <span>Realtime Sync:</span>
+                            <span id="realtime-status" style="color: var(--accent-primary); font-weight: bold;">Disconnected</span>
+                        </div>
+                    </div>
+
                 </div>
             </div>
+
+            <!-- Inset Player Profile Modal -->
+            <div id="profile-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 2rem;">
+                <div style="background: var(--bg-main); width: 100%; max-width: 1000px; max-height: 90vh; overflow-y: auto; border-radius: 16px; position: relative; border: 1px solid var(--glass-border); box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+                    <button id="profile-modal-close" class="btn" style="position: absolute; top: 1.5rem; right: 1.5rem; z-index: 10; padding: 0.5rem 1rem; background: rgba(0,0,0,0.5); border: 1px solid var(--glass-border);"><span style="font-size: 1.2rem;">✕</span> Close</button>
+                    <div id="profile-modal-content"></div>
+                </div>
+            </div>
+
         </div>
     `,
     init: async () => {
         if (!supabase) return;
+
+        // Apply media query dynamically for layout
+        const style = document.createElement('style');
+        style.innerHTML = \`
+            @media(min-width: 900px) {
+                #draft-grid { grid-template-columns: 3fr 1fr !important; }
+            }
+            .player-row:hover { background: rgba(255,255,255,0.05); }
+        \`;
+        document.head.appendChild(style);
         
-        // Clean up any existing channels to prevent "channel already exists" errors on revisit
-        await supabase.removeAllChannels();
-        
-        // Subscribe to real-time draft picks
-        const channel = supabase.channel('draft_room')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draft_picks' }, payload => {
-                console.log('New pick!', payload);
-                // Here we would update the UI to show a player was taken
-            })
-            .subscribe((status) => {
-                const statusEl = document.getElementById('realtime-status');
-                if (status === 'SUBSCRIBED') {
-                    statusEl.innerText = 'Connected';
-                } else {
-                    statusEl.innerText = 'Disconnected';
-                    statusEl.style.color = 'var(--accent-primary)';
-                }
-            });
+        // Setup state
+        DraftView.state = {
+            userId: null,
+            leagueId: null,
+            leagueInfo: null,
+            currentWeek: 1,
+            scoringType: 'individual',
+            members: [],
+            myPicks: [],
+            players: [],
+            projections: {},
+            searchQuery: ''
+        };
 
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-            document.getElementById('qb-list').innerHTML = '<p>Please log in to draft.</p>';
+            document.getElementById('qb-list').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem;">Please log in to draft.</td></tr>';
             return;
         }
+        DraftView.state.userId = session.user.id;
 
-        // Fetch all of the user's leagues
+        // Fetch user's leagues
         const { data: userLeagues } = await supabase
             .from('league_members')
-            .select('league_id, leagues(name, scoring_type)')
+            .select('league_id, leagues(name, scoring_type, current_week, draft_status)')
             .eq('user_id', session.user.id);
 
         const selectEl = document.getElementById('draft-league-select');
         
         if (!userLeagues || userLeagues.length === 0) {
             selectEl.innerHTML = '<option value="">Not in any leagues</option>';
-            document.getElementById('qb-list').innerHTML = '<p>You must join a league to draft.</p>';
+            document.getElementById('qb-list').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem;">You must join a league to draft.</td></tr>';
             return;
         }
 
-        // Populate dropdown
         selectEl.innerHTML = userLeagues.map(ul => 
-            `<option value="${ul.league_id}" data-scoring="${ul.leagues?.scoring_type || 'individual'}">${ul.leagues?.name} (${ul.leagues?.scoring_type === 'team_qb' ? 'Team' : 'Indiv'})</option>`
+            \`<option value="\${ul.league_id}">\${ul.leagues?.name} (\${ul.leagues?.scoring_type === 'team_qb' ? 'Team' : 'Indiv'})</option>\`
         ).join('');
 
-        // Function to load players based on the selected league
-        const loadPlayersForLeague = async () => {
-            const qbList = document.getElementById('qb-list');
-            qbList.innerHTML = '<p>Loading players...</p>';
-            
-            const selectedOption = selectEl.options[selectEl.selectedIndex];
-            if (!selectedOption) return;
-            
-            const scoringType = selectedOption.getAttribute('data-scoring');
-            const playerPosition = scoringType === 'team_qb' ? 'TM_QB' : 'QB';
+        // Modal Handlers
+        const modal = document.getElementById('profile-modal');
+        document.getElementById('profile-modal-close').onclick = () => {
+            modal.style.display = 'none';
+            document.getElementById('profile-modal-content').innerHTML = ''; // Clear memory
+        };
 
-            // Fetch players and latest projections
-            const [{ data: players }, { data: projections }] = await Promise.all([
-                supabase.from('players').select('*').eq('position', playerPosition).limit(50),
-                supabase.from('player_projections').select('*')
-            ]);
+        // Search Handler
+        document.getElementById('draft-search').addEventListener('input', (e) => {
+            DraftView.state.searchQuery = e.target.value.toLowerCase();
+            DraftView.renderPlayerPool();
+        });
+
+        // Listen for league changes
+        selectEl.addEventListener('change', async () => {
+            DraftView.state.leagueId = selectEl.value;
+            await DraftView.loadLeagueData();
+        });
+        
+        // Initial load
+        DraftView.state.leagueId = selectEl.value;
+        await DraftView.loadLeagueData();
+        
+        // Realtime Subscription
+        await supabase.removeAllChannels();
+        const channel = supabase.channel('draft_room')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draft_picks' }, async (payload) => {
+                if (payload.new.league_id === DraftView.state.leagueId) {
+                    console.log('New pick detected:', payload);
+                    // Refresh data quietly if it's for our league
+                    await DraftView.fetchPicks();
+                    DraftView.renderPlayerPool();
+                }
+            })
+            .subscribe((status) => {
+                const statusEl = document.getElementById('realtime-status');
+                if (status === 'SUBSCRIBED') {
+                    statusEl.innerText = 'Connected';
+                    statusEl.style.color = 'var(--accent-success)';
+                } else {
+                    statusEl.innerText = 'Disconnected';
+                    statusEl.style.color = 'var(--accent-primary)';
+                }
+            });
+    },
+
+    loadLeagueData: async () => {
+        const { leagueId, userId } = DraftView.state;
+        if (!leagueId) return;
+
+        // Fetch full league info
+        const { data: league } = await supabase.from('leagues').select('*').eq('id', leagueId).single();
+        DraftView.state.leagueInfo = league;
+        DraftView.state.currentWeek = league.current_week > 18 ? 18 : league.current_week;
+        DraftView.state.scoringType = league.scoring_type;
+        document.getElementById('draft-week').innerText = DraftView.state.currentWeek;
+
+        // Fetch league members for draft order
+        const { data: members } = await supabase.from('league_members')
+            .select('user_id, team_name, season_points')
+            .eq('league_id', leagueId)
+            .order('season_points', { ascending: true }); // Lowest points (worst teams) first
+        
+        DraftView.state.members = members || [];
+        
+        await DraftView.fetchPicks();
+        await DraftView.fetchPlayers();
+        
+        DraftView.renderDraftOrder();
+        DraftView.renderPlayerPool();
+    },
+
+    fetchPicks: async () => {
+        const { leagueId, currentWeek, userId } = DraftView.state;
+        
+        // Fetch ALL picks for this week to know who is unavailable
+        const { data: allPicks } = await supabase.from('draft_picks')
+            .select('player_id, user_id, pick_number, players(name)')
+            .eq('league_id', leagueId)
+            .eq('week', currentWeek);
             
-            let maxWeek = 0;
-            const projMap = {};
-            if (projections && projections.length > 0) {
-                maxWeek = Math.max(...projections.map(p => p.week));
-                projections.filter(p => p.week === maxWeek).forEach(p => {
-                    projMap[p.player_id] = p.projected_custom_points;
-                });
-            }
-            
-            if (players && players.length > 0) {
-                // Sort by projected points descending (worst QBs at the top)
-                players.sort((a, b) => (projMap[b.id] || 0) - (projMap[a.id] || 0));
-                
-                qbList.innerHTML = players.map(p => {
-                    const proj = projMap[p.id] ? projMap[p.id].toFixed(2) : 'N/A';
-                    return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: var(--glass-bg); border-radius: 4px;">
-                        <div style="display: flex; flex-direction: column;">
-                            <span style="font-weight: 600;">${p.name} (${p.team})</span>
-                            <span style="font-size: 0.8rem; color: var(--accent-primary);">Proj: ${proj} pts</span>
-                        </div>
-                        <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Draft</button>
-                    </div>
-                `}).join('');
+        DraftView.state.allPicks = allPicks || [];
+        DraftView.state.myPicks = DraftView.state.allPicks.filter(p => p.user_id === userId);
+        DraftView.renderYourPicks();
+    },
+
+    fetchPlayers: async () => {
+        const { scoringType, currentWeek } = DraftView.state;
+        const playerPosition = scoringType === 'team_qb' ? 'TM_QB' : 'QB';
+
+        document.getElementById('qb-list').innerHTML = '<tr><td colspan="3" style="padding: 2rem; text-align: center;"><div class="spinner" style="margin: 0 auto;"></div></td></tr>';
+
+        // Fetch players and projections
+        const [{ data: players }, { data: projections }] = await Promise.all([
+            supabase.from('players').select('*').eq('position', playerPosition),
+            supabase.from('player_projections').select('*').eq('week', currentWeek)
+        ]);
+        
+        DraftView.state.players = players || [];
+        
+        // Map projections
+        const projMap = {};
+        if (projections) {
+            projections.forEach(p => {
+                projMap[p.player_id] = p.projected_custom_points;
+            });
+        }
+        DraftView.state.projections = projMap;
+    },
+
+    renderYourPicks: () => {
+        const { myPicks } = DraftView.state;
+        const p1 = myPicks.find(p => p.pick_number === 1);
+        const p2 = myPicks.find(p => p.pick_number === 2);
+
+        const renderSlot = (slotEl, pickLabel, pickData) => {
+            if (pickData) {
+                slotEl.innerHTML = \`<span style="font-weight: bold;">\${pickLabel}</span><br/><span style="color: var(--accent-success); font-weight: 600;">\${pickData.players?.name}</span>\`;
+                slotEl.style.borderStyle = 'solid';
+                slotEl.style.borderColor = 'var(--accent-success)';
+                slotEl.style.background = 'rgba(16, 185, 129, 0.1)';
             } else {
-                qbList.innerHTML = '<p style="color: var(--text-secondary)">No active QBs found in database.</p>';
+                slotEl.innerHTML = \`<span style="font-weight: bold;">\${pickLabel}</span><br/><span style="font-size: 0.8rem; color: var(--text-secondary)">Empty</span>\`;
+                slotEl.style.borderStyle = 'dashed';
+                slotEl.style.borderColor = 'var(--glass-border)';
+                slotEl.style.background = 'transparent';
             }
         };
 
-        // Listen for league changes
-        selectEl.addEventListener('change', loadPlayersForLeague);
+        renderSlot(document.getElementById('pick-1-slot'), 'Pick 1', p1);
+        renderSlot(document.getElementById('pick-2-slot'), 'Pick 2', p2);
+    },
+
+    renderDraftOrder: () => {
+        const listEl = document.getElementById('draft-order-list');
+        const { members, allPicks } = DraftView.state;
         
-        // Initial load
-        loadPlayersForLeague();
+        if (members.length === 0) {
+            listEl.innerHTML = 'No teams found.';
+            return;
+        }
+
+        listEl.innerHTML = members.map((m, idx) => {
+            // Check if they drafted yet
+            const theirPicks = (allPicks || []).filter(p => p.user_id === m.user_id);
+            const statusIcon = theirPicks.length >= 2 ? '✅' : (theirPicks.length === 1 ? '⏳' : '❌');
+            
+            return \`
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+                <div>
+                    <span style="font-weight: bold; color: var(--text-secondary); margin-right: 0.5rem;">\${idx + 1}.</span>
+                    <span>\${m.team_name}</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary);">\${m.season_points.toFixed(2)} pts</span>
+                    <span title="\${theirPicks.length} / 2 picks made">\${statusIcon}</span>
+                </div>
+            </div>
+        \`}).join('');
+    },
+
+    renderPlayerPool: () => {
+        const tbody = document.getElementById('qb-list');
+        let { players, projections, searchQuery, allPicks, myPicks } = DraftView.state;
+        
+        // Filter out drafted players
+        const draftedIds = new Set((allPicks || []).map(p => p.player_id));
+        let available = players.filter(p => !draftedIds.has(p.id));
+
+        // Apply Search
+        if (searchQuery) {
+            available = available.filter(p => 
+                p.name.toLowerCase().includes(searchQuery) || 
+                (p.team && p.team.toLowerCase().includes(searchQuery))
+            );
+        }
+
+        // Sort by projected points descending
+        available.sort((a, b) => (projections[b.id] || 0) - (projections[a.id] || 0));
+
+        if (available.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="padding: 2rem; text-align: center;">No available players match your search.</td></tr>';
+            return;
+        }
+
+        // Check if user can draft
+        const canDraft = myPicks.length < 2;
+
+        window.draftPlayer = DraftView.draftPlayer; // Expose for inline onClick
+        window.openProfile = DraftView.openProfile; 
+
+        tbody.innerHTML = available.map(p => {
+            const proj = projections[p.id] ? projections[p.id].toFixed(2) : 'N/A';
+            const headshotHtml = p.headshot_url 
+                ? \`<img src="\${p.headshot_url}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #fff; border: 1px solid var(--glass-border);">\`
+                : \`<div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">🏈</div>\`;
+
+            return \`
+            <tr class="player-row" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;">
+                <td style="padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem;">
+                    \${headshotHtml}
+                    <div style="display: flex; flex-direction: column;">
+                        <a href="javascript:void(0)" onclick="openProfile('\${p.id}')" style="color: var(--text-primary); text-decoration: none; font-weight: 600; font-size: 1.1rem;">\${p.name}</a>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">\${p.position} - \${p.team || 'FA'}</span>
+                    </div>
+                </td>
+                <td style="padding: 1rem 1.5rem; font-weight: bold; color: var(--accent-primary);">
+                    \${proj}
+                </td>
+                <td style="padding: 1rem 1.5rem; text-align: center;">
+                    <button class="btn \${canDraft ? 'btn-primary' : ''}" \${!canDraft ? 'disabled' : ''} 
+                            style="\${!canDraft ? 'background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;' : ''}"
+                            onclick="draftPlayer('\${p.id}')">
+                        \${canDraft ? '+ Draft' : 'Full'}
+                    </button>
+                </td>
+            </tr>
+        \`}).join('');
+    },
+
+    draftPlayer: async (playerId) => {
+        const { leagueId, currentWeek, userId, myPicks } = DraftView.state;
+        if (myPicks.length >= 2) {
+            alert("You have already drafted 2 players for this week.");
+            return;
+        }
+
+        const pickNum = myPicks.find(p => p.pick_number === 1) ? 2 : 1;
+
+        const pickData = {
+            league_id: leagueId,
+            user_id: userId,
+            player_id: playerId,
+            week: currentWeek,
+            pick_number: pickNum
+        };
+
+        const { error } = await supabase.from('draft_picks').insert(pickData);
+        
+        if (error) {
+            console.error(error);
+            if (error.code === '23505') {
+                alert("This player was just drafted by someone else! Try again.");
+            } else {
+                alert("Error making draft pick.");
+            }
+        } else {
+            // Success! Refetch picks and re-render pool (or rely on realtime if it's fast enough, but manual refetch is safer)
+            await DraftView.fetchPicks();
+            DraftView.renderPlayerPool();
+        }
+    },
+
+    openProfile: async (playerId) => {
+        const modal = document.getElementById('profile-modal');
+        const content = document.getElementById('profile-modal-content');
+        
+        modal.style.display = 'flex';
+        content.innerHTML = '<div style="padding: 4rem; text-align: center;"><div class="spinner" style="margin: 0 auto;"></div><p>Loading Profile...</p></div>';
+
+        // Render the PlayerProfileView into the modal container
+        content.innerHTML = PlayerProfileView.render();
+        
+        // Pass the league parameter so the dynamic scoring works!
+        await PlayerProfileView.init({ id: playerId, league: DraftView.state.leagueId });
+        
+        // Minor styling tweak for modal context
+        const viewContainer = content.querySelector('.view-container');
+        if (viewContainer) {
+            viewContainer.style.padding = '0';
+            viewContainer.style.maxWidth = '100%';
+        }
     }
 };
