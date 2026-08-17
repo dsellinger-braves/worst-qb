@@ -18,11 +18,11 @@ export const PlayerProfileView = {
             
             <div class="glass-panel">
                 <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--glass-border); padding-bottom: 1rem;">
-                    <button class="btn btn-primary" id="tab-gamelog" onclick="switchProfileTab('gamelog')">Historical Game Logs</button>
-                    <button class="btn" id="tab-projections" onclick="switchProfileTab('projections')" style="background: rgba(255,255,255,0.1); color: var(--text-secondary);">2026 Projections</button>
+                    <button class="btn" id="tab-gamelog" onclick="switchProfileTab('gamelog')" style="background: rgba(255,255,255,0.1); color: var(--text-secondary);">Historical Game Logs</button>
+                    <button class="btn btn-primary" id="tab-projections" onclick="switchProfileTab('projections')">2026 Projections</button>
                 </div>
 
-                <div id="view-gamelog">
+                <div id="view-gamelog" style="display: none;">
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse; text-align: left;">
                             <thead>
@@ -45,7 +45,7 @@ export const PlayerProfileView = {
                     </div>
                 </div>
 
-                <div id="view-projections" style="display: none;">
+                <div id="view-projections">
                     <div style="overflow-x: auto;">
                         <table style="width: 100%; border-collapse: collapse; text-align: left;">
                             <thead>
