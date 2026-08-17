@@ -71,6 +71,17 @@ export const PlayerProfileView = {
         </div>
     `,
     init: async (params) => {
+        window.switchProfileTab = (tab) => {
+            document.getElementById('view-gamelog').style.display = tab === 'gamelog' ? 'block' : 'none';
+            document.getElementById('view-projections').style.display = tab === 'projections' ? 'block' : 'none';
+            
+            document.getElementById('tab-gamelog').className = tab === 'gamelog' ? 'btn btn-primary' : 'btn';
+            document.getElementById('tab-gamelog').style = tab === 'gamelog' ? '' : 'background: rgba(255,255,255,0.1); color: var(--text-secondary);';
+            
+            document.getElementById('tab-projections').className = tab === 'projections' ? 'btn btn-primary' : 'btn';
+            document.getElementById('tab-projections').style = tab === 'projections' ? '' : 'background: rgba(255,255,255,0.1); color: var(--text-secondary);';
+        };
+
         if (!supabase || !params || !params.id) return;
         const playerId = params.id;
 
@@ -221,16 +232,5 @@ export const PlayerProfileView = {
                 `;
             }).join('');
         }
-
-        window.switchProfileTab = (tab) => {
-            document.getElementById('view-gamelog').style.display = tab === 'gamelog' ? 'block' : 'none';
-            document.getElementById('view-projections').style.display = tab === 'projections' ? 'block' : 'none';
-            
-            document.getElementById('tab-gamelog').className = tab === 'gamelog' ? 'btn btn-primary' : 'btn';
-            document.getElementById('tab-gamelog').style = tab === 'gamelog' ? '' : 'background: rgba(255,255,255,0.1); color: var(--text-secondary);';
-            
-            document.getElementById('tab-projections').className = tab === 'projections' ? 'btn btn-primary' : 'btn';
-            document.getElementById('tab-projections').style = tab === 'projections' ? '' : 'background: rgba(255,255,255,0.1); color: var(--text-secondary);';
-        };
     }
 };
