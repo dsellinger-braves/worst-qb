@@ -98,10 +98,11 @@ export const LeagueDetailView = {
 
         // Fetch Draft Picks
         const { data: picks, error: pErr } = await supabase.from('draft_picks')
-            .select('week, pick_number, user_id, player_id, players(name, id), league_members!inner(team_name)')
+            .select('week, pick_number, user_id, player_id, players(name, id)')
             .eq('league_id', leagueId)
-            .eq('league_members.league_id', leagueId)
             .order('week', { ascending: true });
+            
+        if (pErr) console.error("Error fetching picks:", pErr);
             
         // Fetch Player Stats to attach points to picks
         const { data: statsData } = await supabase.from('player_stats')
@@ -115,18 +116,27 @@ export const LeagueDetailView = {
         }
         
         if (picks && picks.length > 0) {
+            // Create a lookup map for team names based on user_id
+            const teamMap = {};
+            if (LeagueDetailView.teams) {
+                LeagueDetailView.teams.forEach(t => {
+                    teamMap[t.user_id] = t.team_name;
+                });
+            }
+
             // Group picks by week
             LeagueDetailView.picksByWeek = picks.reduce((acc, pick) => {
                 acc[pick.week] = acc[pick.week] || [];
-                // Attach points
+                // Attach points and team name
                 pick.points = statsMap[`${pick.player_id}_${pick.week}`] || 0;
+                pick.team_name = teamMap[pick.user_id] || 'Unknown Team';
                 acc[pick.week].push(pick);
                 return acc;
             }, {});
             
             // Group picks by team (user_id)
             LeagueDetailView.picksByTeam = picks.reduce((acc, pick) => {
-                acc[pick.user_id] = acc[pick.user_id] || { team_name: pick.league_members.team_name, weeks: {} };
+                acc[pick.user_id] = acc[pick.user_id] || { team_name: pick.team_name, weeks: {} };
                 acc[pick.user_id].weeks[pick.week] = acc[pick.user_id].weeks[pick.week] || [];
                 acc[pick.user_id].weeks[pick.week].push(pick);
                 return acc;
@@ -226,7 +236,7 @@ export const LeagueDetailView = {
         const teamsData = {};
         picks.forEach(p => {
             if (!teamsData[p.user_id]) {
-                teamsData[p.user_id] = { team_name: p.league_members.team_name, picks: [], totalPoints: 0 };
+                teamsData[p.user_id] = { team_name: p.team_name, picks: [], totalPoints: 0 };
             }
             teamsData[p.user_id].picks.push(p);
             teamsData[p.user_id].totalPoints += p.points;
