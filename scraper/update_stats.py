@@ -411,6 +411,15 @@ def main():
                     })
                     # Add to db_players locally so we don't duplicate
                     db_players.append({'id': pid, 'name': player_info['name']})
+                else:
+                    # Existing player, update their position/team
+                    new_players.append({
+                        'id': pid,
+                        'name': player_info['name'],
+                        'team': player_info['team'],
+                        'position': player_info['position'],
+                        'status': 'active'
+                    })
                 
                 # If they have no projections, we at least want a baseline 0 for the current week so they show up
                 if not p_data['projections']:
@@ -428,8 +437,10 @@ def main():
                         })
                 
             if new_players:
-                print(f"Adding {len(new_players)} new players from ESPN to database...")
-                supabase.table('players').upsert(new_players, on_conflict='id').execute()
+                # Deduplicate before upserting
+                unique_players = { p['id']: p for p in new_players }.values()
+                print(f"Adding/Updating {len(unique_players)} players in database...")
+                supabase.table('players').upsert(list(unique_players), on_conflict='id').execute()
 
             if proj_records:
                 unique_projs = { (pr['player_id'], pr['week']): pr for pr in proj_records }.values()
