@@ -356,8 +356,32 @@ export const DraftView = {
             return;
         }
 
-        // Check if user can draft
-        const canDraft = myPicks.length < 2;
+        // Determine if it's the user's turn
+        let isMyTurn = false;
+        let waitingOn = null;
+        const myIndex = members.findIndex(m => m.user_id === DraftView.state.userId);
+        
+        if (myIndex !== -1 && myPicks.length < 2) {
+            // Check if Round 1 is complete (everyone has at least 1 pick)
+            const everyoneHasRound1 = members.every(m => {
+                return (allPicks || []).filter(p => p.user_id === m.user_id).length >= 1;
+            });
+            
+            const targetPicks = everyoneHasRound1 ? 2 : 1;
+            
+            if (myPicks.length < targetPicks) {
+                isMyTurn = true;
+                for (let i = 0; i < myIndex; i++) {
+                    const memberAhead = members[i];
+                    const theirPicks = (allPicks || []).filter(p => p.user_id === memberAhead.user_id);
+                    if (theirPicks.length < targetPicks) {
+                        isMyTurn = false;
+                        waitingOn = memberAhead.team_name;
+                        break;
+                    }
+                }
+            }
+        }
 
         window.draftPlayer = DraftView.draftPlayer; // Expose for inline onClick
         window.openProfile = DraftView.openProfile; 
@@ -367,6 +391,15 @@ export const DraftView = {
             const headshotHtml = p.headshot_url 
                 ? `<img src="${p.headshot_url}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #fff; border: 1px solid var(--glass-border);">`
                 : `<div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">🏈</div>`;
+
+            let draftButtonHtml = '';
+            if (myPicks.length >= 2) {
+                draftButtonHtml = `<button class="btn" disabled style="background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;">Full</button>`;
+            } else if (!isMyTurn) {
+                draftButtonHtml = `<button class="btn" disabled style="background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;" title="Waiting on ${waitingOn || 'someone else'}">Wait</button>`;
+            } else {
+                draftButtonHtml = `<button class="btn btn-primary" onclick="draftPlayer('${p.id}')">+ Draft</button>`;
+            }
 
             return `
             <tr class="player-row" style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;">
@@ -381,21 +414,40 @@ export const DraftView = {
                     ${proj}
                 </td>
                 <td style="padding: 1rem 1.5rem; text-align: center;">
-                    <button class="btn ${canDraft ? 'btn-primary' : ''}" ${!canDraft ? 'disabled' : ''} 
-                            style="${!canDraft ? 'background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;' : ''}"
-                            onclick="draftPlayer('${p.id}')">
-                        ${canDraft ? '+ Draft' : 'Full'}
-                    </button>
+                    ${draftButtonHtml}
                 </td>
             </tr>
         `}).join('');
     },
 
     draftPlayer: async (playerId) => {
-        const { leagueId, currentWeek, userId, myPicks } = DraftView.state;
+        const { leagueId, currentWeek, userId, myPicks, members, allPicks } = DraftView.state;
         if (myPicks.length >= 2) {
             alert("You have already drafted 2 players for this week.");
             return;
+        }
+
+        // Strict Turn Validation
+        const myIndex = members.findIndex(m => m.user_id === userId);
+        if (myIndex === -1) {
+            alert("You are not a member of this league.");
+            return;
+        }
+
+        const everyoneHasRound1 = members.every(m => {
+            return (allPicks || []).filter(p => p.user_id === m.user_id).length >= 1;
+        });
+        const targetPicks = everyoneHasRound1 ? 2 : 1;
+
+        if (myPicks.length < targetPicks) {
+            for (let i = 0; i < myIndex; i++) {
+                const memberAhead = members[i];
+                const theirPicks = (allPicks || []).filter(p => p.user_id === memberAhead.user_id);
+                if (theirPicks.length < targetPicks) {
+                    alert(`It is not your turn yet! Waiting on ${memberAhead.team_name}.`);
+                    return;
+                }
+            }
         }
 
         const pickNum = myPicks.find(p => p.pick_number === 1) ? 2 : 1;
