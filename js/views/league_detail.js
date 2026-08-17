@@ -250,11 +250,11 @@ export const LeagueDetailView = {
                         <td style="padding: 1rem 0.5rem;">${t.team_name}</td>
                         <td style="padding: 1rem 0.5rem;">
                             <a href="#" data-route="player_profile" data-id="${t.picks[0]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${t.picks[0]?.players?.name || '-'}</a>
-                            <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${t.picks[0]?.points.toFixed(2) || '0.00'} pts</span>
+                            <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${t.picks[0] ? t.picks[0].points.toFixed(2) : '0.00'} pts</span>
                         </td>
                         <td style="padding: 1rem 0.5rem;">
                             <a href="#" data-route="player_profile" data-id="${t.picks[1]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${t.picks[1]?.players?.name || '-'}</a>
-                            <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${t.picks[1]?.points.toFixed(2) || '0.00'} pts</span>
+                            <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${t.picks[1] ? t.picks[1].points.toFixed(2) : '0.00'} pts</span>
                         </td>
                         <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold; font-size: 1.1rem;">${t.totalPoints.toFixed(2)}</td>
                     </tr>
@@ -293,11 +293,11 @@ export const LeagueDetailView = {
                         <td style="padding: 1rem 0.5rem; font-weight: bold;">Week ${w}</td>
                         <td style="padding: 1rem 0.5rem;">
                             <a href="#" data-route="player_profile" data-id="${picks[0]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${picks[0]?.players?.name || '-'}</a>
-                            <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${picks[0]?.points.toFixed(2) || '0.00'} pts</span>
+                            <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${picks[0] ? picks[0].points.toFixed(2) : '0.00'} pts</span>
                         </td>
                         <td style="padding: 1rem 0.5rem;">
                             <a href="#" data-route="player_profile" data-id="${picks[1]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${picks[1]?.players?.name || '-'}</a>
-                            <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${picks[1]?.points.toFixed(2) || '0.00'} pts</span>
+                            <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${picks[1] ? picks[1].points.toFixed(2) : '0.00'} pts</span>
                         </td>
                         <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold; font-size: 1.1rem;">${wPts.toFixed(2)}</td>
                         <td style="padding: 1rem 0.5rem; font-weight: bold;">${cumulativePoints.toFixed(2)}</td>
