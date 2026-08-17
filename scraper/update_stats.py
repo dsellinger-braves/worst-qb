@@ -113,13 +113,25 @@ def main():
     supabase: Client = create_client(url, key)
     
     year = 2023
-    print("Fetching Roster and Weekly Data...")
+    print("Fetching Roster, Weekly Data, and Schedules...")
     try:
         weekly_data = nfl.import_weekly_data([year])
         rosters = nfl.import_seasonal_rosters([year])
+        schedules = nfl.import_schedules([year])
     except Exception as e:
         print(f"Error fetching NFL data: {e}")
         return
+        
+    def did_team_lose(team, week):
+        game = schedules[(schedules['week'] == week) & ((schedules['home_team'] == team) | (schedules['away_team'] == team))]
+        if game.empty: return False
+        g = game.iloc[0]
+        if pd.isna(g['home_score']) or pd.isna(g['away_score']):
+            return False
+        if g['home_team'] == team:
+            return g['home_score'] < g['away_score']
+        else:
+            return g['away_score'] < g['home_score']
         
     if weekly_data.empty:
         print("No data available for the given year.")
@@ -168,7 +180,7 @@ def main():
             'rushing_tds': row['rushing_tds'],
             'fumbles_lost': row.get('sack_fumbles_lost', 0),
             'sacks': row['sacks'],
-            'team_loss': False
+            'team_loss': did_team_lose(row['recent_team'], row['week'])
         }
         
         custom_points = calculate_worst_qb_score(stats)
@@ -232,7 +244,7 @@ def main():
                 'rushing_tds': 0,
                 'fumbles_lost': 0,
                 'sacks': 0,
-                'team_loss': False
+                'team_loss': did_team_lose(team, int(week))
             }
             
         ts = team_stats_dict[key]
@@ -287,7 +299,7 @@ def main():
     if records_to_upsert:
         print(f"Upserting {len(records_to_upsert)} stat records...")
         try:
-            supabase.table('player_stats').upsert(records_to_upsert).execute()
+            supabase.table('player_stats').upsert(records_to_upsert, on_conflict='player_id,week').execute()
             print("Stats updated successfully!")
         except Exception as e:
             print(f"Error updating Supabase stats: {e}")
