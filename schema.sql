@@ -11,7 +11,20 @@ CREATE TABLE public.leagues (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     current_week INTEGER DEFAULT 1,
     draft_status TEXT DEFAULT 'pending', -- 'pending', 'active', 'completed'
-    scoring_type TEXT DEFAULT 'individual' -- 'individual', 'team_qb'
+    scoring_type TEXT DEFAULT 'individual', -- 'individual', 'team_qb'
+    scoring_settings JSONB DEFAULT '{
+      "pass_yds": -0.05,
+      "pass_tds": -5.0,
+      "ints": 3.0,
+      "pick_sixes": 5.0,
+      "rush_yds": -0.1,
+      "rush_tds": -5.0,
+      "fumbles_lost": 3.0,
+      "sacks": 1.0,
+      "team_loss": 5.0,
+      "no_attempts": -20.0,
+      "completion_penalty_multiplier": 20.0
+    }'::jsonb
 );
 
 -- 2. League Members (Tracks Season Long Points)
@@ -22,6 +35,7 @@ CREATE TABLE public.league_members (
     team_name TEXT,
     season_points NUMERIC DEFAULT 0,
     draft_position INTEGER, -- Order in the draft
+    is_admin BOOLEAN DEFAULT false,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(league_id, user_id)
 );

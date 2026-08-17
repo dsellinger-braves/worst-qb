@@ -1,4 +1,5 @@
 import { supabase } from '../supabase.js';
+import { calculateLeagueScore } from '../scoring.js';
 
 export const LeagueDetailView = {
     render: () => `
@@ -8,7 +9,10 @@ export const LeagueDetailView = {
                     <h1 id="ld-title">Loading League...</h1>
                     <p id="ld-status" style="color: var(--text-secondary);"></p>
                 </div>
-                <button id="ld-draft-btn" class="btn btn-primary" style="display: none;">Enter Draft Room</button>
+                <div style="display: flex; gap: 1rem;">
+                    <button id="ld-settings-btn" class="btn" style="display: none;">League Settings</button>
+                    <button id="ld-draft-btn" class="btn btn-primary" style="display: none;">Enter Draft Room</button>
+                </div>
             </div>
             
             <!-- Tabs -->
@@ -54,6 +58,32 @@ export const LeagueDetailView = {
                 <div id="ld-team-content" style="overflow-x: auto;"></div>
             </div>
             
+            <!-- Settings Modal -->
+            <div id="ld-settings-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 1rem;">
+                <div class="glass-panel" style="max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h2>League Scoring Settings</h2>
+                        <button id="ld-settings-close" class="btn" style="padding: 0.2rem 0.5rem;">✕</button>
+                    </div>
+                    <form id="ld-settings-form">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                            <div><label>Pass Yds</label><input type="number" step="0.01" id="s-pass-yds" class="form-input"></div>
+                            <div><label>Pass TDs</label><input type="number" step="0.1" id="s-pass-tds" class="form-input"></div>
+                            <div><label>Interceptions</label><input type="number" step="0.1" id="s-ints" class="form-input"></div>
+                            <div><label>Pick Sixes</label><input type="number" step="0.1" id="s-pick-sixes" class="form-input"></div>
+                            <div><label>Rush Yds</label><input type="number" step="0.01" id="s-rush-yds" class="form-input"></div>
+                            <div><label>Rush TDs</label><input type="number" step="0.1" id="s-rush-tds" class="form-input"></div>
+                            <div><label>Fumbles Lost</label><input type="number" step="0.1" id="s-fumbles" class="form-input"></div>
+                            <div><label>Sacks</label><input type="number" step="0.1" id="s-sacks" class="form-input"></div>
+                            <div><label>Team Loss Bonus</label><input type="number" step="0.1" id="s-team-loss" class="form-input"></div>
+                            <div><label>No Attempts Penalty</label><input type="number" step="0.1" id="s-no-att" class="form-input"></div>
+                            <div style="grid-column: 1 / -1;"><label>Completion % Penalty Multiplier</label><input type="number" step="0.1" id="s-comp-mult" class="form-input"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">Save Settings</button>
+                    </form>
+                </div>
+            </div>
+            
         </div>
     `,
     init: async (params) => {
@@ -75,26 +105,34 @@ export const LeagueDetailView = {
         document.getElementById('ld-status').innerText = `Week ${league.current_week} | Draft Status: ${league.draft_status}`;
         LeagueDetailView.maxWeek = league.current_week > 18 ? 18 : league.current_week;
         
-        // Show Draft Button and route it to draft
+        // Show Draft Button and route it via hash
         const draftBtn = document.getElementById('ld-draft-btn');
         draftBtn.style.display = 'block';
         draftBtn.addEventListener('click', () => {
-            const event = new MouseEvent('click', { bubbles: true, cancelable: true });
-            const link = document.createElement('a');
-            link.href = "#";
-            link.className = 'nav-link';
-            link.setAttribute('data-route', 'draft');
-            document.body.appendChild(link);
-            link.dispatchEvent(event);
-            link.remove();
+            window.location.hash = '#/draft';
         });
 
-        // Fetch Teams
+        // Fetch Teams and check admin status
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUserId = session ? session.user.id : null;
+        let isAdmin = false;
+
         const { data: teams, error: tErr } = await supabase.from('league_members')
-            .select('user_id, team_name, season_points')
-            .eq('league_id', leagueId)
-            .order('season_points', { ascending: false });
-        if (teams) LeagueDetailView.teams = teams;
+            .select('user_id, team_name, season_points, is_admin')
+            .eq('league_id', leagueId);
+        if (teams) {
+            LeagueDetailView.teams = teams;
+            // Check if current user is admin
+            const myMember = teams.find(t => t.user_id === currentUserId);
+            if (myMember && myMember.is_admin) isAdmin = true;
+        }
+
+        // Setup Admin Settings UI
+        if (isAdmin) {
+            const settingsBtn = document.getElementById('ld-settings-btn');
+            settingsBtn.style.display = 'block';
+            LeagueDetailView.setupAdminSettings(league);
+        }
 
         // Fetch Draft Picks
         const { data: picks, error: pErr } = await supabase.from('draft_picks')
@@ -104,18 +142,21 @@ export const LeagueDetailView = {
             
         if (pErr) console.error("Error fetching picks:", pErr);
             
-        // Fetch Player Stats to attach points to picks
+        // Fetch ALL Player Stats to calculate dynamic points
         const { data: statsData } = await supabase.from('player_stats')
-            .select('player_id, week, custom_points');
+            .select('*');
             
-        const statsMap = {}; // key: "player_id_week" -> custom_points
+        const statsMap = {}; // key: "player_id_week" -> stats object
         if (statsData) {
             statsData.forEach(s => {
-                statsMap[`${s.player_id}_${s.week}`] = s.custom_points;
+                statsMap[`${s.player_id}_${s.week}`] = s;
             });
         }
         
         if (picks && picks.length > 0) {
+            // Reset dynamic season points for recalculation
+            LeagueDetailView.teams.forEach(t => t.season_points = 0);
+
             // Create a lookup map for team names based on user_id
             const teamMap = {};
             if (LeagueDetailView.teams) {
@@ -127,20 +168,31 @@ export const LeagueDetailView = {
             // Group picks by week
             LeagueDetailView.picksByWeek = picks.reduce((acc, pick) => {
                 acc[pick.week] = acc[pick.week] || [];
-                // Attach points and team name
-                pick.points = statsMap[`${pick.player_id}_${pick.week}`] || 0;
+                // Attach dynamic points using league settings
+                const stats = statsMap[`${pick.player_id}_${pick.week}`];
+                pick.points = calculateLeagueScore(stats, league.scoring_settings);
                 pick.team_name = teamMap[pick.user_id] || 'Unknown Team';
                 acc[pick.week].push(pick);
                 return acc;
             }, {});
             
-            // Group picks by team (user_id)
+            // Group picks by team and update dynamic standings
             LeagueDetailView.picksByTeam = picks.reduce((acc, pick) => {
                 acc[pick.user_id] = acc[pick.user_id] || { team_name: pick.team_name, weeks: {} };
                 acc[pick.user_id].weeks[pick.week] = acc[pick.user_id].weeks[pick.week] || [];
                 acc[pick.user_id].weeks[pick.week].push(pick);
+                
+                // Add to dynamic team standings
+                const teamObj = LeagueDetailView.teams.find(t => t.user_id === pick.user_id);
+                if (teamObj) {
+                    teamObj.season_points += pick.points;
+                }
+                
                 return acc;
             }, {});
+            
+            // Re-sort teams based on newly calculated dynamic points
+            LeagueDetailView.teams.sort((a, b) => b.season_points - a.season_points);
             
             // Update max week based on picks
             const draftedWeeks = Object.keys(LeagueDetailView.picksByWeek).map(Number);
@@ -259,11 +311,11 @@ export const LeagueDetailView = {
                         <td style="padding: 1rem 0.5rem; font-weight: bold;">${idx + 1}</td>
                         <td style="padding: 1rem 0.5rem;">${t.team_name}</td>
                         <td style="padding: 1rem 0.5rem;">
-                            <a href="#" data-route="player_profile" data-id="${t.picks[0]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${t.picks[0]?.players?.name || '-'}</a>
+                            <a href="#/player_profile?id=${t.picks[0]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${t.picks[0]?.players?.name || '-'}</a>
                             <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${t.picks[0] ? t.picks[0].points.toFixed(2) : '0.00'} pts</span>
                         </td>
                         <td style="padding: 1rem 0.5rem;">
-                            <a href="#" data-route="player_profile" data-id="${t.picks[1]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${t.picks[1]?.players?.name || '-'}</a>
+                            <a href="#/player_profile?id=${t.picks[1]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${t.picks[1]?.players?.name || '-'}</a>
                             <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${t.picks[1] ? t.picks[1].points.toFixed(2) : '0.00'} pts</span>
                         </td>
                         <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold; font-size: 1.1rem;">${t.totalPoints.toFixed(2)}</td>
@@ -302,11 +354,11 @@ export const LeagueDetailView = {
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
                         <td style="padding: 1rem 0.5rem; font-weight: bold;">Week ${w}</td>
                         <td style="padding: 1rem 0.5rem;">
-                            <a href="#" data-route="player_profile" data-id="${picks[0]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${picks[0]?.players?.name || '-'}</a>
+                            <a href="#/player_profile?id=${picks[0]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${picks[0]?.players?.name || '-'}</a>
                             <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${picks[0] ? picks[0].points.toFixed(2) : '0.00'} pts</span>
                         </td>
                         <td style="padding: 1rem 0.5rem;">
-                            <a href="#" data-route="player_profile" data-id="${picks[1]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${picks[1]?.players?.name || '-'}</a>
+                            <a href="#/player_profile?id=${picks[1]?.players?.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${picks[1]?.players?.name || '-'}</a>
                             <br><span style="font-size: 0.8rem; color: var(--accent-secondary);">${picks[1] ? picks[1].points.toFixed(2) : '0.00'} pts</span>
                         </td>
                         <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold; font-size: 1.1rem;">${wPts.toFixed(2)}</td>

@@ -79,12 +79,14 @@ def main():
         indiv_members.append({
             'league_id': indiv_league_id,
             'user_id': user_id,
-            'team_name': f"{team_names[i]} (Indiv)"
+            'team_name': f"{team_names[i]} (Indiv)",
+            'is_admin': user_id == creator_id
         })
         team_members.append({
             'league_id': team_league_id,
             'user_id': user_id,
-            'team_name': f"{team_names[i]} (Team)"
+            'team_name': f"{team_names[i]} (Team)",
+            'is_admin': user_id == creator_id
         })
         
     supabase.table('league_members').insert(indiv_members).execute()

@@ -35,7 +35,7 @@ export const LeaguesView = {
             listEl.innerHTML = data.map(league => `
                 <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <h3><a href="#" data-route="league_detail" data-id="${league.id}" style="color: var(--text-primary); text-decoration: none;">${league.name} <span style="font-size: 0.8rem;">(View Details)</span></a></h3>
+                        <h3><a href="#/league_detail?id=${league.id}" style="color: var(--text-primary); text-decoration: none;">${league.name} <span style="font-size: 0.8rem;">(View Details)</span></a></h3>
                         <p>Status: ${league.draft_status} | Scoring: ${league.scoring_type === 'team_qb' ? 'Team QBs' : 'Individual QBs'}</p>
                     </div>
                     <button class="btn join-league-btn" data-id="${league.id}" style="background: var(--glass-border); color: white;">Join</button>
@@ -80,11 +80,21 @@ export const LeaguesView = {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (!session) return alert("Must be logged in!");
                 
-                const { error } = await supabase.from('leagues').insert([
+                const { data: newLeague, error: lError } = await supabase.from('leagues').insert([
                     { name: leagueName, created_by: session.user.id, scoring_type: scoringType }
-                ]);
-                if (error) alert("Error creating league");
-                else fetchLeagues();
+                ]).select();
+                
+                if (lError) {
+                    alert("Error creating league: " + lError.message);
+                } else if (newLeague && newLeague.length > 0) {
+                    const teamName = prompt("League created! Enter your Team Name to join as the Admin:");
+                    if (teamName) {
+                        await supabase.from('league_members').insert([
+                            { league_id: newLeague[0].id, user_id: session.user.id, team_name: teamName, is_admin: true }
+                        ]);
+                    }
+                    fetchLeagues();
+                }
             }
         });
     }

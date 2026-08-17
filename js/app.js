@@ -29,7 +29,8 @@ const routes = {
 const router = new Router(routes);
 
 // Default Route
-router.navigate('rules');
+// Handle initial hash routing
+router.handleHashChange();
 
 // Authentication Handler
 const authBtn = document.getElementById('auth-btn');
