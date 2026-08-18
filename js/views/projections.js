@@ -38,16 +38,31 @@ export const ProjectionsView = {
     init: async () => {
         if (!supabase) return;
 
-        // Fetch projections
-        const { data, error } = await supabase.from('player_projections')
-            .select('*, players(name, team, position, headshot_url)');
-            
-        if (error) {
-            document.getElementById('proj-table-body').innerHTML = `<tr><td colspan="5">Error loading projections.</td></tr>`;
-            return;
+        let allData = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+            const { data, error } = await supabase.from('player_projections')
+                .select('*, players(name, team, position, headshot_url)')
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+                
+            if (error) {
+                document.getElementById('proj-table-body').innerHTML = `<tr><td colspan="5">Error loading projections.</td></tr>`;
+                return;
+            }
+
+            if (data && data.length > 0) {
+                allData = allData.concat(data);
+                page++;
+            }
+            if (!data || data.length < pageSize) {
+                hasMore = false;
+            }
         }
         
-        ProjectionsView.rawData = data || [];
+        ProjectionsView.rawData = allData || [];
         
         const availableWeeks = [...new Set(ProjectionsView.rawData.map(d => d.week))].sort((a,b) => a - b);
         const weekSelect = document.getElementById('proj-week-filter');
