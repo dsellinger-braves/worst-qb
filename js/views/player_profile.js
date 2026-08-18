@@ -140,12 +140,29 @@ export const PlayerProfileView = {
             return;
         }
 
+        let totalCmp = 0, totalAtt = 0, totalYds = 0, totalTds = 0, totalInt = 0, totalSack = 0, totalFum = 0, totalPts = 0;
+
         tbody.innerHTML = stats.map(s => {
-            // Use dynamic league score if we came from a league, else default to database points
+            const isPre = s.season_type === 'preseason';
             const pts = leagueSettings ? calculateLeagueScore(s, leagueSettings) : (s.custom_points || 0);
+            
+            if (!isPre) {
+                totalCmp += s.completions || 0;
+                totalAtt += s.attempts || 0;
+                totalYds += s.passing_yards || 0;
+                totalTds += s.passing_tds || 0;
+                totalInt += s.interceptions || 0;
+                totalSack += s.sacks || 0;
+                totalFum += s.fumbles_lost || 0;
+                totalPts += pts;
+            }
+            
             return `
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${s.week}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">
+                    ${s.week} 
+                    ${isPre ? '<span style="font-size: 0.7rem; background: var(--accent-secondary); color: white; padding: 0.1rem 0.3rem; border-radius: 4px; margin-left: 0.5rem;">PRE</span>' : ''}
+                </td>
                 <td style="padding: 1rem 0.5rem;">${s.completions || 0} / ${s.attempts || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.passing_yards || 0}</td>
                 <td style="padding: 1rem 0.5rem;">${s.passing_tds || 0}</td>
@@ -158,31 +175,17 @@ export const PlayerProfileView = {
             `;
         }).join('');
         
-        // Add a totals row
-        const totals = stats.reduce((acc, s) => {
-            const pts = leagueSettings ? calculateLeagueScore(s, leagueSettings) : (s.custom_points || 0);
-            acc.comp += s.completions || 0;
-            acc.att += s.attempts || 0;
-            acc.yds += s.passing_yards || 0;
-            acc.tds += s.passing_tds || 0;
-            acc.ints += s.interceptions || 0;
-            acc.sacks += s.sacks || 0;
-            acc.fumbles += s.fumbles_lost || 0;
-            acc.pts += pts;
-            return acc;
-        }, { comp: 0, att: 0, yds: 0, tds: 0, ints: 0, sacks: 0, fumbles: 0, pts: 0 });
-        
         tbody.innerHTML += `
             <tr style="background: rgba(255,255,255,0.05); border-top: 2px solid var(--glass-border);">
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">Total</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.comp} / ${totals.att}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.yds}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.tds}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.ints}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.sacks}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totals.fumbles}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">Total (Reg Season)</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalCmp} / ${totalAtt}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalYds}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalTds}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalInt}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalSack}</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalFum}</td>
                 <td style="padding: 1rem 0.5rem;">-</td>
-                <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${totals.pts.toFixed(2)}</td>
+                <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${totalPts.toFixed(2)}</td>
             </tr>
         `;
 

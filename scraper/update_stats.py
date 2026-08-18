@@ -259,9 +259,105 @@ def scrape_espn_projections(year, current_week):
         print(f"Error scraping ESPN: {e}")
         return []
 
+def fetch_actuals_gamecast(year, week, season_type):
+    import urllib.request
+    import json
+    
+    url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={year}&seasontype={season_type}&week={week}"
+    try:
+        req = urllib.request.Request(url)
+        res = urllib.request.urlopen(req)
+        data = json.loads(res.read())
+        
+        events = data.get('events', [])
+        
+        all_stats = []
+        for event in events:
+            event_id = event['id']
+            gc_url = f"https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/summary?region=us&lang=en&contentorigin=espn&event={event_id}&features=ng"
+            gc_req = urllib.request.Request(gc_url)
+            gc_res = urllib.request.urlopen(gc_req)
+            gc_data = json.loads(gc_res.read())
+            
+            boxscore = gc_data.get('boxscore', {})
+            players_block = boxscore.get('players', [])
+            
+            team_loss_dict = {}
+            competitions = gc_data.get('header', {}).get('competitions', [{}])
+            if competitions:
+                competitors = competitions[0].get('competitors', [])
+                for c in competitors:
+                    team_id = c.get('team', {}).get('id')
+                    winner = c.get('winner', False)
+                    is_loss = False
+                    if winner == False:
+                        other_team = next((o for o in competitors if o['id'] != c['id']), None)
+                        if other_team and other_team.get('winner'):
+                            is_loss = True
+                    if team_id:
+                        team_loss_dict[int(team_id)] = is_loss
+
+            for team_obj in players_block:
+                team_id = team_obj.get('team', {}).get('id')
+                if team_id: team_id = int(team_id)
+                team_abbr = ESPN_TEAM_MAP.get(team_id, 'FA') if team_id else 'FA'
+                is_loss = team_loss_dict.get(team_id, False)
+                
+                player_stats = {}
+                for stat_group in team_obj.get('statistics', []):
+                    cat_name = stat_group.get('name', '')
+                    keys = stat_group.get('keys', [])
+                    for athlete in stat_group.get('athletes', []):
+                        pid = athlete.get('athlete', {}).get('id')
+                        pname = athlete.get('athlete', {}).get('displayName')
+                        if not pid: continue
+                        
+                        espn_id = f"espn-{pid}"
+                        if espn_id not in player_stats:
+                            player_stats[espn_id] = {
+                                'player_id': espn_id, 'name': pname, 'team': team_abbr, 'week': week,
+                                'season_type': 'preseason' if season_type == 1 else 'regular',
+                                'attempts': 0, 'completions': 0, 'passing_yards': 0,
+                                'passing_tds': 0, 'interceptions': 0, 'pick_sixes': 0,
+                                'rushing_yards': 0, 'rushing_tds': 0, 'fumbles_lost': 0,
+                                'sacks': 0, 'team_loss': is_loss
+                            }
+                            
+                        p_obj = player_stats[espn_id]
+                        stats_arr = athlete.get('stats', [])
+                        
+                        if cat_name == 'passing':
+                            for i, key in enumerate(keys):
+                                val = stats_arr[i] if i < len(stats_arr) else "0"
+                                if key == "completions/passingAttempts":
+                                    parts = val.split('/')
+                                    if len(parts) == 2:
+                                        p_obj['completions'] = int(parts[0])
+                                        p_obj['attempts'] = int(parts[1])
+                                elif key == "passingYards": p_obj['passing_yards'] = int(val)
+                                elif key == "passingTouchdowns": p_obj['passing_tds'] = int(val)
+                                elif key == "interceptions": p_obj['interceptions'] = int(val)
+                                elif key == "sacks-sackYardsLost":
+                                    parts = val.split('-')
+                                    if len(parts) >= 1: p_obj['sacks'] = int(parts[0])
+                        elif cat_name == 'rushing':
+                            for i, key in enumerate(keys):
+                                val = stats_arr[i] if i < len(stats_arr) else "0"
+                                if key == "rushingYards": p_obj['rushing_yards'] = int(val)
+                                elif key == "rushingTouchdowns": p_obj['rushing_tds'] = int(val)
+                        elif cat_name == 'fumbles':
+                            for i, key in enumerate(keys):
+                                val = stats_arr[i] if i < len(stats_arr) else "0"
+                                if key == "fumblesLost": p_obj['fumbles_lost'] = int(val)
+                all_stats.extend(player_stats.values())
+        return all_stats
+    except Exception as e:
+        print(f"Error fetching actuals for week {week} seasonType {season_type}: {e}")
+        return []
+
 def main():
     parser = argparse.ArgumentParser(description="Worst QB Live Stats Scraper")
-    parser.add_argument('--year', type=int, default=2023, help="NFL Season Year to scrape (e.g. 2021)")
+    parser.add_argument('--year', type=int, default=2026, help="NFL Season Year to scrape (e.g. 2026)")
     args = parser.parse_args()
     
     print(f"Starting Worst QB Stats Scraper for {args.year}...")
@@ -275,127 +371,68 @@ def main():
     supabase: Client = create_client(url, key)
     
     year = args.year
-    print("Fetching Roster, Weekly Data, and Schedules...")
-    try:
-        weekly_data = nfl.import_weekly_data([year])
-        rosters = nfl.import_seasonal_rosters([year])
-        schedules = nfl.import_schedules([year])
-    except Exception as e:
-        print(f"Error fetching NFL data: {e}")
-        weekly_data = pd.DataFrame()
-        rosters = pd.DataFrame()
-        schedules = pd.DataFrame()
+    print("Fetching Gamecast Actuals...")
         
-    def did_team_lose(team, week):
-        game = schedules[(schedules['week'] == week) & ((schedules['home_team'] == team) | (schedules['away_team'] == team))]
-        if game.empty: return False
-        g = game.iloc[0]
-        if pd.isna(g['home_score']) or pd.isna(g['away_score']):
-            return False
-        if g['home_team'] == team:
-            return g['home_score'] < g['away_score']
-        else:
-            return g['away_score'] < g['home_score']
+    # We will fetch preseason weeks (1 to 4) and regular season weeks (1 to 18)
+    all_game_stats = []
+    
+    # Preseason (season_type = 1)
+    for w in range(1, 5):
+        stats = fetch_actuals_gamecast(year, w, 1)
+        if stats: all_game_stats.extend(stats)
+        
+    # Regular Season (season_type = 2)
+    for w in range(1, 19):
+        stats = fetch_actuals_gamecast(year, w, 2)
+        if stats: all_game_stats.extend(stats)
         
     records_to_upsert = []
-    if weekly_data.empty:
-        qbs = pd.DataFrame()
-    else:
-        qbs = weekly_data[weekly_data['position'] == 'QB'].copy()
     
-    for index, row in qbs.iterrows():
+    for row in all_game_stats:
         player_id = row['player_id']
         
-        # Get bio from roster data
-        roster_info = rosters[rosters['player_id'] == player_id]
-        headshot = ""
-        height = ""
-        weight = 0
-        college = ""
-        age = 0
-        
-        if not roster_info.empty:
-            r = roster_info.iloc[0]
-            headshot = r.get('headshot_url', "")
-            height = r.get('height', "")
-            weight = r.get('weight', 0)
-            college = r.get('college', "")
-            age = r.get('age', 0)
-            # handle NaNs safely
-            weight = int(weight) if pd.notna(weight) else 0
-            age = int(age) if pd.notna(age) else 0
-            headshot = headshot if pd.notna(headshot) else ""
-            height = height if pd.notna(height) else ""
-            college = college if pd.notna(college) else ""
-
-        stats = {
-            'player_id': player_id,
-            'week': row['week'],
-            'attempts': row['attempts'],
-            'completions': row['completions'],
-            'passing_yards': row['passing_yards'],
-            'passing_tds': row['passing_tds'],
-            'interceptions': row['interceptions'],
-            'pick_sixes': 0, 
-            'rushing_yards': row['rushing_yards'],
-            'rushing_tds': row['rushing_tds'],
-            'fumbles_lost': row.get('sack_fumbles_lost', 0),
-            'sacks': row['sacks'],
-            'team_loss': did_team_lose(row['recent_team'], row['week'])
-        }
-        
-        custom_points = calculate_worst_qb_score(stats)
-        
-        records_to_upsert.append({
-            'player_id': stats['player_id'],
-            'week': int(stats['week']),
-            'passing_yards': int(stats['passing_yards']),
-            'passing_tds': int(stats['passing_tds']),
-            'interceptions': int(stats['interceptions']),
-            'pick_sixes': 0,
-            'rushing_yards': int(stats['rushing_yards']),
-            'rushing_tds': int(stats['rushing_tds']),
-            'fumbles_lost': int(stats['fumbles_lost']),
-            'sacks': int(stats['sacks']),
-            'attempts': int(stats['attempts']),
-            'completions': int(stats['completions']),
-            'completion_percentage': float(stats['completions']/stats['attempts']) if stats['attempts'] > 0 else 0,
-            'custom_points': float(custom_points),
-            'team_loss': bool(stats['team_loss'])
-        })
-        
-        # Upsert Player Info with new bio fields
-        player_data = {
-            'id': player_id,
-            'name': row['player_display_name'],
-            'team': row['recent_team'],
-            'position': 'QB',
-            'headshot_url': headshot,
-            'height': height,
-            'weight': weight,
-            'college': college,
-            'age': age
-        }
-        try:
-            supabase.table('players').upsert(player_data).execute()
-        except Exception as e:
-            pass
-
-    # Aggregate Team QBs
-    team_stats_dict = {}
-    for index, row in qbs.iterrows():
-        team = row.get('recent_team')
-        if not team or pd.isna(team):
+        # We only want to save players who actually registered attempts (either passing or rushing) 
+        # to avoid cluttering the DB with 0-stat lines for every player in the boxscore
+        if row['attempts'] == 0 and row['rushing_yards'] == 0 and row['fumbles_lost'] == 0:
             continue
             
-        week = row.get('week')
-        key = (team, week)
+        custom_points = calculate_worst_qb_score(row)
+        
+        records_to_upsert.append({
+            'player_id': player_id,
+            'week': int(row['week']),
+            'season_type': row['season_type'],
+            'passing_yards': int(row['passing_yards']),
+            'passing_tds': int(row['passing_tds']),
+            'interceptions': int(row['interceptions']),
+            'pick_sixes': int(row['pick_sixes']),
+            'rushing_yards': int(row['rushing_yards']),
+            'rushing_tds': int(row['rushing_tds']),
+            'fumbles_lost': int(row['fumbles_lost']),
+            'sacks': int(row['sacks']),
+            'attempts': int(row['attempts']),
+            'completions': int(row['completions']),
+            'completion_percentage': float(row['completions']/row['attempts']) if row['attempts'] > 0 else 0,
+            'custom_points': float(custom_points),
+            'team_loss': bool(row['team_loss'])
+        })
+        
+    # Aggregate Team QBs
+    team_stats_dict = {}
+    for row in records_to_upsert:
+        team = row.get('team')
+        if not team or team == 'FA': continue
+            
+        week = row['week']
+        season_type = row['season_type']
+        key = (team, week, season_type)
         
         if key not in team_stats_dict:
             team_stats_dict[key] = {
-                'player_id': f'TEAM_{team}',
+                'player_id': f'TEAM_{team}_{season_type}',
                 'team': team,
                 'week': int(week),
+                'season_type': season_type,
                 'attempts': 0,
                 'completions': 0,
                 'passing_yards': 0,
@@ -406,19 +443,19 @@ def main():
                 'rushing_tds': 0,
                 'fumbles_lost': 0,
                 'sacks': 0,
-                'team_loss': did_team_lose(team, int(week))
+                'team_loss': row['team_loss']
             }
             
         ts = team_stats_dict[key]
-        ts['attempts'] += int(row.get('attempts', 0) if pd.notna(row.get('attempts')) else 0)
-        ts['completions'] += int(row.get('completions', 0) if pd.notna(row.get('completions')) else 0)
-        ts['passing_yards'] += int(row.get('passing_yards', 0) if pd.notna(row.get('passing_yards')) else 0)
-        ts['passing_tds'] += int(row.get('passing_tds', 0) if pd.notna(row.get('passing_tds')) else 0)
-        ts['interceptions'] += int(row.get('interceptions', 0) if pd.notna(row.get('interceptions')) else 0)
-        ts['rushing_yards'] += int(row.get('rushing_yards', 0) if pd.notna(row.get('rushing_yards')) else 0)
-        ts['rushing_tds'] += int(row.get('rushing_tds', 0) if pd.notna(row.get('rushing_tds')) else 0)
-        ts['fumbles_lost'] += int(row.get('sack_fumbles_lost', 0) if pd.notna(row.get('sack_fumbles_lost')) else 0)
-        ts['sacks'] += int(row.get('sacks', 0) if pd.notna(row.get('sacks')) else 0)
+        ts['attempts'] += row['attempts']
+        ts['completions'] += row['completions']
+        ts['passing_yards'] += row['passing_yards']
+        ts['passing_tds'] += row['passing_tds']
+        ts['interceptions'] += row['interceptions']
+        ts['rushing_yards'] += row['rushing_yards']
+        ts['rushing_tds'] += row['rushing_tds']
+        ts['fumbles_lost'] += row['fumbles_lost']
+        ts['sacks'] += row['sacks']
 
     # Upsert Team QB players and their stats
     for key, ts in team_stats_dict.items():
@@ -436,13 +473,14 @@ def main():
         }
         try:
             supabase.table('players').upsert(player_data).execute()
-        except Exception as e:
+        except Exception:
             pass
             
         custom_points = calculate_worst_qb_score(ts)
         records_to_upsert.append({
             'player_id': ts['player_id'],
             'week': ts['week'],
+            'season_type': ts['season_type'],
             'passing_yards': ts['passing_yards'],
             'passing_tds': ts['passing_tds'],
             'interceptions': ts['interceptions'],
@@ -458,17 +496,20 @@ def main():
             'team_loss': bool(ts['team_loss'])
         })
 
-    # Upsert Stats
     if records_to_upsert:
-        print(f"Upserting {len(records_to_upsert)} stat records...")
-        try:
-            supabase.table('player_stats').upsert(records_to_upsert, on_conflict='player_id,week').execute()
-            print("Stats updated successfully!")
-        except Exception as e:
-            print(f"Error updating Supabase stats: {e}")
+        # Upsert in chunks to avoid payload limits
+        chunk_size = 500
+        for i in range(0, len(records_to_upsert), chunk_size):
+            chunk = records_to_upsert[i:i + chunk_size]
+            try:
+                # Need to use the new unique constraint for on_conflict
+                supabase.table('player_stats').upsert(chunk, on_conflict='player_id,week,season_type').execute()
+            except Exception as e:
+                print(f"Error upserting stats chunk: {e}")
+        print(f"Successfully upserted {len(records_to_upsert)} actual stat lines!")
             
     # Upsert Projections
-    current_week = int(weekly_data['week'].max() + 1) if not weekly_data.empty else 1
+    current_week = 1 
     projections_data = scrape_espn_projections(year, current_week)
     if projections_data:
         try:
