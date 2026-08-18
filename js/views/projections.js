@@ -7,14 +7,14 @@ export const ProjectionsView = {
             <p>Projected Worst QB points for the upcoming week based on ESPN.</p>
             
             <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem; flex-wrap: wrap;">
-                <select id="proj-week-filter" class="input" style="width: auto; background: rgba(0,0,0,0.5);" onchange="ProjectionsView.processAndRender()"></select>
-                <select id="proj-position-filter" class="input" style="width: auto; background: rgba(0,0,0,0.5);" onchange="ProjectionsView.processAndRender()">
-                    <option value="QB">QBs Only</option>
-                    <option value="NON_QB">Non-QBs Only</option>
-                    <option value="ALL">All Players</option>
+                <select id="proj-week-filter" class="form-input" style="width: auto;" onchange="ProjectionsView.processAndRender()"></select>
+                <select id="proj-position-filter" class="form-input" style="width: auto;" onchange="ProjectionsView.processAndRender()">
+                    <option value="ALL" style="background: var(--bg-secondary); color: var(--text-primary);">All Players</option>
+                    <option value="QB" style="background: var(--bg-secondary); color: var(--text-primary);">QBs Only</option>
+                    <option value="NON_QB" style="background: var(--bg-secondary); color: var(--text-primary);">Non-QBs Only</option>
                 </select>
-                <input type="text" id="proj-search" class="input" placeholder="Search players..." style="flex: 1; min-width: 200px;" onkeyup="ProjectionsView.handleFilter()">
-                <input type="number" id="proj-min-attempts" class="input" placeholder="Min Proj Attempts" style="width: 150px;" onkeyup="ProjectionsView.handleFilter()" onchange="ProjectionsView.handleFilter()" min="0" step="1">
+                <input type="text" id="proj-search" class="form-input" placeholder="Search players..." style="flex: 1; min-width: 200px;" onkeyup="ProjectionsView.handleFilter()">
+                <input type="number" id="proj-min-attempts" class="form-input" placeholder="Min Proj Attempts" style="width: 150px;" onkeyup="ProjectionsView.handleFilter()" onchange="ProjectionsView.handleFilter()" min="0" step="1">
             </div>
 
             <div style="margin-top: 2rem; overflow-x: auto;">
@@ -67,7 +67,7 @@ export const ProjectionsView = {
         
         const availableWeeks = [...new Set(ProjectionsView.rawData.map(d => d.week))].sort((a,b) => a - b);
         const weekSelect = document.getElementById('proj-week-filter');
-        weekSelect.innerHTML = availableWeeks.map(w => `<option value="${w}">Week ${w}</option>`).join('');
+        weekSelect.innerHTML = availableWeeks.map(w => `<option value="${w}" style="background: var(--bg-secondary); color: var(--text-primary);">Week ${w}</option>`).join('');
         if (availableWeeks.length > 0) weekSelect.value = availableWeeks[0]; // Default to upcoming week
         
         ProjectionsView.sortCol = 'pts';
