@@ -564,7 +564,7 @@ def main():
     projections_data = scrape_espn_projections(year, current_week)
     if projections_data:
         try:
-            db_players = supabase.table('players').select('id, name').execute().data
+            db_players = supabase.table('players').select('id, name').like('id', 'espn-%').execute().data
             
             # Simple fuzzy matching (last name or exact match)
             name_to_id = {}
