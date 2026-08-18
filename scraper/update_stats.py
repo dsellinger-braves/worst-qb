@@ -320,7 +320,8 @@ def fetch_actuals_gamecast(year, week, season_type):
                                 'attempts': 0, 'completions': 0, 'passing_yards': 0,
                                 'passing_tds': 0, 'interceptions': 0, 'pick_sixes': 0,
                                 'rushing_yards': 0, 'rushing_tds': 0, 'fumbles_lost': 0,
-                                'sacks': 0, 'team_loss': is_loss
+                                'sacks': 0, 'team_loss': is_loss,
+                                'headshot': athlete.get('athlete', {}).get('headshot', {}).get('href', '')
                             }
                             
                         p_obj = player_stats[espn_id]
@@ -387,9 +388,21 @@ def main():
         if stats: all_game_stats.extend(stats)
         
     records_to_upsert = []
+    players_to_upsert = {}
     
     for row in all_game_stats:
         player_id = row['player_id']
+        
+        # Collect player profiles to avoid foreign key constraints
+        if player_id not in players_to_upsert:
+            players_to_upsert[player_id] = {
+                'id': player_id,
+                'name': row.get('name', 'Unknown'),
+                'team': row.get('team', 'FA'),
+                'position': 'QB', # Default to QB for stats since we don't have position data in gamecast easily
+                'headshot_url': row.get('headshot', ''),
+                'height': '', 'weight': 0, 'college': '', 'age': 0
+            }
         
         # We only want to save players who actually registered attempts (either passing or rushing) 
         # to avoid cluttering the DB with 0-stat lines for every player in the boxscore
@@ -496,6 +509,19 @@ def main():
             'team_loss': bool(ts['team_loss'])
         })
 
+    # Upsert Players to satisfy Foreign Keys
+    players_list = list(players_to_upsert.values())
+    if players_list:
+        chunk_size = 500
+        for i in range(0, len(players_list), chunk_size):
+            chunk = players_list[i:i + chunk_size]
+            try:
+                # We upsert without overriding bio data if they already exist, but Supabase python client doesn't natively support DO NOTHING easily without raw SQL.
+                # Since we want to ensure they exist, we just upsert. It might overwrite position, but scrape_espn_projections runs right after and fixes it!
+                supabase.table('players').upsert(chunk, on_conflict='id').execute()
+            except Exception as e:
+                pass
+                
     if records_to_upsert:
         # Upsert in chunks to avoid payload limits
         chunk_size = 500

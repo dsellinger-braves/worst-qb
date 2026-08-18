@@ -131,6 +131,7 @@ export const PlayerProfileView = {
         const { data: stats, error: sErr } = await supabase.from('player_stats')
             .select('*')
             .eq('player_id', playerId)
+            .order('season_type', { ascending: true })
             .order('week', { ascending: true });
             
         const tbody = document.getElementById('pp-gamelog');
@@ -157,8 +158,12 @@ export const PlayerProfileView = {
                 totalPts += pts;
             }
             
+            const rowBg = isPre ? 'rgba(128, 0, 128, 0.15)' : 'transparent';
+            const hoverBg = isPre ? 'rgba(128, 0, 128, 0.25)' : 'rgba(255,255,255,0.05)';
+            const borderBottom = isPre ? 'none' : '1px solid rgba(255,255,255,0.05)';
+            
             return `
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+            <tr style="background: ${rowBg}; border-bottom: ${borderBottom}; transition: background 0.2s;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${rowBg}'">
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">
                     ${s.week} 
                     ${isPre ? '<span style="font-size: 0.7rem; background: var(--accent-secondary); color: white; padding: 0.1rem 0.3rem; border-radius: 4px; margin-left: 0.5rem;">PRE</span>' : ''}

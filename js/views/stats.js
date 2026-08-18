@@ -58,8 +58,8 @@ export const StatsView = {
         const processAndRender = () => {
             const viewType = document.getElementById('stats-view-select').value;
             
-            // Filter data by position
-            const filteredData = StatsView.rawData.filter(stat => stat.players?.position === viewType);
+            // Filter data by position and exclude preseason
+            const filteredData = StatsView.rawData.filter(stat => stat.players?.position === viewType && stat.season_type !== 'preseason');
 
             // Aggregate stats by player
             const aggregated = filteredData.reduce((acc, stat) => {
