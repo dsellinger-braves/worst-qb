@@ -96,6 +96,7 @@ export const ProjectionsView = {
                 return {
                     id: d.player_id,
                     name: d.players?.name || 'Unknown',
+                    pos: d.players?.position || 'UNK',
                     team: d.players?.team || '-',
                     headshot: d.players?.headshot_url || '',
                     opponent: oppName,
@@ -186,7 +187,10 @@ export const ProjectionsView = {
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${idx + 1}</td>
                 <td style="padding: 1rem 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
                     ${p.headshot ? `<img src="${p.headshot}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #fff;">` : `<div style="width: 32px; height: 32px; border-radius: 50%; background: var(--glass-border);"></div>`}
-                    <a href="#" data-route="player_profile" data-id="${p.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${p.name}</a>
+                    <div>
+                        <a href="#" data-route="player_profile" data-id="${p.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${p.name}</a>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">${p.pos}</div>
+                    </div>
                 </td>
                 <td style="padding: 1rem 0.5rem;">${p.team}</td>
                 <td style="padding: 1rem 0.5rem;">${p.opponent}</td>
@@ -195,3 +199,4 @@ export const ProjectionsView = {
         `).join('');
     }
 };
+window.ProjectionsView = ProjectionsView;
