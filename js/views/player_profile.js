@@ -58,11 +58,12 @@ export const PlayerProfileView = {
                                     <th style="padding: 1rem 0.5rem;">Rush Yds</th>
                                     <th style="padding: 1rem 0.5rem;">Rush TD</th>
                                     <th style="padding: 1rem 0.5rem;">Fumbles</th>
+                                    <th style="padding: 1rem 0.5rem;">Win Prob</th>
                                     <th style="padding: 1rem 0.5rem; color: var(--accent-primary);">Proj Pts</th>
                                 </tr>
                             </thead>
                             <tbody id="pp-projections">
-                                <tr><td colspan="9" style="text-align: center; padding: 2rem;">Loading projections...</td></tr>
+                                <tr><td colspan="10" style="text-align: center; padding: 2rem;">Loading projections...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -203,7 +204,7 @@ export const PlayerProfileView = {
         const projTbody = document.getElementById('pp-projections');
         
         if (projErr || !projections || projections.length === 0) {
-            projTbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem;">No projections available.</td></tr>`;
+            projTbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem;">No projections available.</td></tr>`;
         } else {
             projTbody.innerHTML = projections.map(p => {
                 let raw = {};
@@ -218,10 +219,16 @@ export const PlayerProfileView = {
                     return `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                         <td style="padding: 1rem 0.5rem; font-weight: bold;">${p.week}</td>
-                        <td colspan="8" style="padding: 1rem 0.5rem; color: var(--text-secondary); text-align: center;">BYE</td>
+                        <td colspan="9" style="padding: 1rem 0.5rem; color: var(--text-secondary); text-align: center;">BYE</td>
                     </tr>
                     `;
                 }
+                
+                let winProb = 0.5;
+                if (raw.team_loss_prob !== undefined) {
+                    winProb = 1.0 - raw.team_loss_prob;
+                }
+                const winProbColor = (winProb > 0.5) ? 'var(--success-color)' : (winProb < 0.5 ? 'var(--danger-color)' : 'var(--text-secondary)');
                 
                 const pts = leagueSettings ? calculateLeagueScore(raw, leagueSettings) : p.projected_custom_points;
                 
@@ -235,6 +242,7 @@ export const PlayerProfileView = {
                     <td style="padding: 1rem 0.5rem;">${(raw.rushing_yards || 0).toFixed(1)}</td>
                     <td style="padding: 1rem 0.5rem;">${(raw.rushing_tds || 0).toFixed(1)}</td>
                     <td style="padding: 1rem 0.5rem;">${(raw.fumbles_lost || 0).toFixed(1)}</td>
+                    <td style="padding: 1rem 0.5rem; color: ${winProbColor}; font-weight: 500;">${(winProb * 100).toFixed(1)}%</td>
                     <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${pts.toFixed(2)}</td>
                 </tr>
                 `;
