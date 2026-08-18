@@ -6,9 +6,15 @@ export const ProjectionsView = {
             <h1>Weekly Projections</h1>
             <p>Projected Worst QB points for the upcoming week based on ESPN.</p>
             
-            <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem;">
-                <input type="text" id="proj-search" class="input" placeholder="Search players..." style="flex: 1;" onkeyup="ProjectionsView.handleFilter()">
-                <input type="number" id="proj-min-attempts" class="input" placeholder="Min Proj Attempts" style="width: 200px;" onkeyup="ProjectionsView.handleFilter()" onchange="ProjectionsView.handleFilter()" min="0" step="1">
+            <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem; flex-wrap: wrap;">
+                <select id="proj-week-filter" class="input" style="width: auto; background: rgba(0,0,0,0.5);" onchange="ProjectionsView.processAndRender()"></select>
+                <select id="proj-position-filter" class="input" style="width: auto; background: rgba(0,0,0,0.5);" onchange="ProjectionsView.processAndRender()">
+                    <option value="QB">QBs Only</option>
+                    <option value="NON_QB">Non-QBs Only</option>
+                    <option value="ALL">All Players</option>
+                </select>
+                <input type="text" id="proj-search" class="input" placeholder="Search players..." style="flex: 1; min-width: 200px;" onkeyup="ProjectionsView.handleFilter()">
+                <input type="number" id="proj-min-attempts" class="input" placeholder="Min Proj Attempts" style="width: 150px;" onkeyup="ProjectionsView.handleFilter()" onchange="ProjectionsView.handleFilter()" min="0" step="1">
             </div>
 
             <div style="margin-top: 2rem; overflow-x: auto;">
@@ -41,37 +47,69 @@ export const ProjectionsView = {
             return;
         }
         
-        // Find the latest week
-        const maxWeek = data.length > 0 ? Math.max(...data.map(d => d.week)) : 0;
-        const currentData = data.filter(d => d.week === maxWeek && (d.players?.position === 'QB' || d.players?.position === 'TM_QB')).map(d => {
-            let oppName = d.opponent || 'TBD';
-            let rawStats = {};
-            try {
-                if (d.opponent && d.opponent.startsWith('{')) {
-                    const parsed = JSON.parse(d.opponent);
-                    oppName = parsed.opp || 'TBD';
-                    rawStats = parsed.raw || {};
-                }
-            } catch(e) {}
-            
-            return {
-                id: d.player_id,
-                name: d.players?.name || 'Unknown',
-                team: d.players?.team || '-',
-                headshot: d.players?.headshot_url || '',
-                opponent: oppName,
-                raw: rawStats,
-                pts: d.projected_custom_points || 0
-            };
-        });
-
-        currentData.sort((a, b) => b.pts - a.pts); // worst QB points first
+        ProjectionsView.rawData = data || [];
         
-        ProjectionsView.currentData = currentData;
+        const availableWeeks = [...new Set(ProjectionsView.rawData.map(d => d.week))].sort((a,b) => a - b);
+        const weekSelect = document.getElementById('proj-week-filter');
+        weekSelect.innerHTML = availableWeeks.map(w => `<option value="${w}">Week ${w}</option>`).join('');
+        if (availableWeeks.length > 0) weekSelect.value = availableWeeks[0]; // Default to upcoming week
+        
         ProjectionsView.sortCol = 'pts';
         ProjectionsView.sortAsc = false;
         
-        ProjectionsView.renderTable();
+        ProjectionsView.processAndRender = () => {
+            const selectedWeek = parseInt(document.getElementById('proj-week-filter').value) || 0;
+            const selectedPos = document.getElementById('proj-position-filter').value;
+            
+            const currentData = ProjectionsView.rawData.filter(d => {
+                if (d.week !== selectedWeek) return false;
+                const pos = d.players?.position || 'UNKNOWN';
+                if (selectedPos === 'QB') return pos === 'QB' || pos === 'TM_QB';
+                if (selectedPos === 'NON_QB') return pos !== 'QB' && pos !== 'TM_QB';
+                return true; // ALL
+            }).map(d => {
+                let oppName = d.opponent || 'TBD';
+                let rawStats = {};
+                try {
+                    if (d.opponent && d.opponent.startsWith('{')) {
+                        const parsed = JSON.parse(d.opponent);
+                        oppName = parsed.opp || 'TBD';
+                        rawStats = parsed.raw || {};
+                    }
+                } catch(e) {}
+                
+                return {
+                    id: d.player_id,
+                    name: d.players?.name || 'Unknown',
+                    team: d.players?.team || '-',
+                    headshot: d.players?.headshot_url || '',
+                    opponent: oppName,
+                    raw: rawStats,
+                    pts: d.projected_custom_points || 0
+                };
+            });
+    
+            currentData.sort((a, b) => b.pts - a.pts);
+            ProjectionsView.currentData = currentData;
+            
+            // Re-apply sorting if changed
+            if (ProjectionsView.sortCol !== 'pts' || ProjectionsView.sortAsc !== false) {
+                ProjectionsView.currentData.sort((a, b) => {
+                    let valA = a[ProjectionsView.sortCol];
+                    let valB = b[ProjectionsView.sortCol];
+                    if (ProjectionsView.sortCol === 'rank') { valA = a.pts; valB = b.pts; }
+                    
+                    if (valA < valB) return ProjectionsView.sortAsc ? -1 : 1;
+                    if (valA > valB) return ProjectionsView.sortAsc ? 1 : -1;
+                    return 0;
+                });
+                if (ProjectionsView.sortCol === 'rank') ProjectionsView.currentData.reverse();
+            }
+            
+            ProjectionsView.renderTable();
+        };
+
+        ProjectionsView.processAndRender();
         
         // Add sorting listeners
         document.getElementById('proj-header-row').querySelectorAll('th').forEach(th => {
