@@ -262,6 +262,7 @@ def scrape_espn_projections(year, current_week):
 def fetch_actuals_gamecast(year, week, season_type):
     import urllib.request
     import json
+    import re
     
     url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={year}&seasontype={season_type}&week={week}"
     try:
@@ -274,13 +275,29 @@ def fetch_actuals_gamecast(year, week, season_type):
         all_stats = []
         for event in events:
             event_id = event['id']
-            gc_url = f"https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/summary?region=us&lang=en&contentorigin=espn&event={event_id}&features=ng"
+            gc_url = f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event={event_id}"
             gc_req = urllib.request.Request(gc_url)
             gc_res = urllib.request.urlopen(gc_req)
             gc_data = json.loads(gc_res.read())
             
             boxscore = gc_data.get('boxscore', {})
             players_block = boxscore.get('players', [])
+            
+            # --- Parse Pick Sixes from Play-by-Play ---
+            pick_sixes_count = {}
+            drives = gc_data.get('drives', {})
+            previous_drives = drives.get('previous', [])
+            current_drive = drives.get('current', {})
+            all_drives = previous_drives + ([current_drive] if current_drive else [])
+            
+            for drive in all_drives:
+                for play in drive.get('plays', []):
+                    text = play.get('text', '')
+                    if play.get('scoringPlay', False) and 'INTERCEPTED' in text and 'TOUCHDOWN' in text:
+                        match = re.search(r"(?:\]|\)|^\s*)\s*([A-Z]\.[A-Za-z\-\']+)\s+pass", text)
+                        if match:
+                            qb_name = match.group(1)
+                            pick_sixes_count[qb_name] = pick_sixes_count.get(qb_name, 0) + 1
             
             team_loss_dict = {}
             competitions = gc_data.get('header', {}).get('competitions', [{}])
@@ -313,12 +330,20 @@ def fetch_actuals_gamecast(year, week, season_type):
                         if not pid: continue
                         
                         espn_id = f"espn-{pid}"
+                        
+                        p6_count = 0
+                        for ini_name, count in pick_sixes_count.items():
+                            ini_parts = ini_name.split('.')
+                            if len(ini_parts) == 2:
+                                if pname.upper().startswith(ini_parts[0].upper()) and ini_parts[1].upper().replace("-", "").replace("'", "") in pname.upper().replace("-", "").replace("'", ""):
+                                    p6_count += count
+                                    
                         if espn_id not in player_stats:
                             player_stats[espn_id] = {
                                 'player_id': espn_id, 'name': pname, 'team': team_abbr, 'week': week,
                                 'season_type': 'preseason' if season_type == 1 else 'regular',
                                 'attempts': 0, 'completions': 0, 'passing_yards': 0,
-                                'passing_tds': 0, 'interceptions': 0, 'pick_sixes': 0,
+                                'passing_tds': 0, 'interceptions': 0, 'pick_sixes': p6_count,
                                 'rushing_yards': 0, 'rushing_tds': 0, 'fumbles_lost': 0,
                                 'sacks': 0, 'team_loss': is_loss,
                                 'headshot': athlete.get('athlete', {}).get('headshot', {}).get('href', '')
