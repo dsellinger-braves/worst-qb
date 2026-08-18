@@ -25,11 +25,12 @@ export const ProjectionsView = {
                             <th style="padding: 1rem 0.5rem;" data-sort="name">Player ↕</th>
                             <th style="padding: 1rem 0.5rem;" data-sort="team">Team ↕</th>
                             <th style="padding: 1rem 0.5rem;" data-sort="opponent">Opponent ↕</th>
+                            <th style="padding: 1rem 0.5rem;" data-sort="win_prob">Win Prob ↕</th>
                             <th style="padding: 1rem 0.5rem; color: var(--accent-primary);" data-sort="pts">Projected Pts ↕</th>
                         </tr>
                     </thead>
                     <tbody id="proj-table-body">
-                        <tr><td colspan="5" style="text-align: center; padding: 2rem;">Loading projections...</td></tr>
+                        <tr><td colspan="6" style="text-align: center; padding: 2rem;">Loading projections...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -49,7 +50,7 @@ export const ProjectionsView = {
                 .range(page * pageSize, (page + 1) * pageSize - 1);
                 
             if (error) {
-                document.getElementById('proj-table-body').innerHTML = `<tr><td colspan="5">Error loading projections.</td></tr>`;
+                document.getElementById('proj-table-body').innerHTML = `<tr><td colspan="6">Error loading projections.</td></tr>`;
                 return;
             }
 
@@ -93,6 +94,11 @@ export const ProjectionsView = {
                     }
                 } catch(e) {}
                 
+                let winProb = 0.5;
+                if (rawStats.team_loss_prob !== undefined) {
+                    winProb = 1.0 - rawStats.team_loss_prob;
+                }
+                
                 return {
                     id: d.player_id,
                     name: d.players?.name || 'Unknown',
@@ -100,6 +106,7 @@ export const ProjectionsView = {
                     team: d.players?.team || '-',
                     headshot: d.players?.headshot_url || '',
                     opponent: oppName,
+                    win_prob: winProb,
                     raw: rawStats,
                     pts: d.projected_custom_points || 0
                 };
@@ -178,7 +185,7 @@ export const ProjectionsView = {
         }
 
         if (filtered.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 2rem;">No projections found.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem;">No projections found.</td></tr>`;
             return;
         }
 
@@ -194,6 +201,9 @@ export const ProjectionsView = {
                 </td>
                 <td style="padding: 1rem 0.5rem;">${p.team}</td>
                 <td style="padding: 1rem 0.5rem;">${p.opponent}</td>
+                <td style="padding: 1rem 0.5rem; color: ${(p.win_prob > 0.5) ? 'var(--success-color)' : (p.win_prob < 0.5 ? 'var(--danger-color)' : 'var(--text-secondary)')}; font-weight: 500;">
+                    ${(p.win_prob * 100).toFixed(1)}%
+                </td>
                 <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${p.pts.toFixed(2)}</td>
             </tr>
         `).join('');
