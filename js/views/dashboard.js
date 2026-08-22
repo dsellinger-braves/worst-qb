@@ -30,15 +30,21 @@ export const DashboardView = {
             // Fetch leagues
             const { data, error } = await supabase
                 .from('league_members')
-                .select('leagues(name, current_week), season_points, team_name')
+                .select('league_id, leagues(name, current_week), season_points, team_name')
                 .eq('user_id', session.user.id);
                 
             if (data && data.length > 0) {
                 document.getElementById('user-leagues-list').innerHTML = data.map(m => `
-                    <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px;">
-                        <h3>${m.leagues.name} (Week ${m.leagues.current_week})</h3>
-                        <p>Team: ${m.team_name} | Season Points: ${m.season_points}</p>
-                    </div>
+                    <a href="#/league_detail?league=${m.league_id}" style="text-decoration: none; color: inherit; display: block;">
+                        <div style="background: rgba(0,0,0,0.4); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--glass-border); transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.6)'; this.style.borderColor='var(--accent-primary)';" onmouseout="this.style.background='rgba(0,0,0,0.4)'; this.style.borderColor='var(--glass-border)';">
+                            <h3 style="margin-bottom: 0.5rem; color: var(--accent-primary); font-size: 1.5rem;">${m.leagues.name}</h3>
+                            <p style="color: var(--text-secondary); margin-bottom: 0.5rem;">Week ${m.leagues.current_week}</p>
+                            <div style="display: flex; gap: 2rem;">
+                                <span><strong>Team:</strong> ${m.team_name}</span>
+                                <span><strong>Season Points:</strong> ${m.season_points.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </a>
                 `).join('');
             } else {
                 document.getElementById('user-leagues-list').innerHTML = '<p>You are not in any leagues yet.</p>';

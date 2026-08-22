@@ -43,8 +43,9 @@ export const StatsView = {
             </div>
         </div>
     `,
-    init: async () => {
+    init: async (params = {}) => {
         if (!supabase) return;
+        StatsView.leagueId = params.league || null;
 
         let allData = [];
         let page = 0;
@@ -202,7 +203,7 @@ export const StatsView = {
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${idx + 1}</td>
                 <td style="padding: 1rem 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
                     ${p.headshot ? `<img src="${p.headshot}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #fff;">` : `<div style="width: 32px; height: 32px; border-radius: 50%; background: var(--glass-border);"></div>`}
-                    <a href="#" data-route="player_profile" data-id="${p.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${p.name}</a>
+                    <a href="#/player_profile?id=${p.id}${StatsView.leagueId ? '&league='+StatsView.leagueId : ''}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${p.name}</a>
                 </td>
                 <td style="padding: 1rem 0.5rem;">${p.team}</td>
                 <td style="padding: 1rem 0.5rem;">${p.passYds}</td>

@@ -131,8 +131,9 @@ export const LeagueDetailView = {
         </div>
     `,
     init: async (params) => {
-        if (!supabase || !params || !params.id) return;
-        const leagueId = params.id;
+        const targetId = params?.league || params?.id;
+        if (!supabase || !targetId) return;
+        const leagueId = targetId;
         
         // --- State Variables ---
         LeagueDetailView.leagueId = leagueId;
@@ -153,7 +154,7 @@ export const LeagueDetailView = {
         const draftBtn = document.getElementById('ld-draft-btn');
         draftBtn.style.display = 'block';
         draftBtn.addEventListener('click', () => {
-            window.location.hash = '#/draft';
+            window.location.hash = `#/draft?league=${leagueId}`;
         });
 
         // Fetch Teams and check admin status

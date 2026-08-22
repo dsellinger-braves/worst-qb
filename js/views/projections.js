@@ -36,8 +36,9 @@ export const ProjectionsView = {
             </div>
         </div>
     `,
-    init: async () => {
+    init: async (params = {}) => {
         if (!supabase) return;
+        ProjectionsView.leagueId = params.league || null;
 
         let allData = [];
         let page = 0;
@@ -195,7 +196,7 @@ export const ProjectionsView = {
                 <td style="padding: 1rem 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
                     ${p.headshot ? `<img src="${p.headshot}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: #fff;">` : `<div style="width: 32px; height: 32px; border-radius: 50%; background: var(--glass-border);"></div>`}
                     <div>
-                        <a href="#" data-route="player_profile" data-id="${p.id}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${p.name}</a>
+                        <a href="#/player_profile?id=${p.id}${ProjectionsView.leagueId ? '&league='+ProjectionsView.leagueId : ''}" style="color: var(--text-primary); text-decoration: none; font-weight: 600;">${p.name}</a>
                         <div style="font-size: 0.8rem; color: var(--text-secondary);">${p.pos}</div>
                     </div>
                 </td>

@@ -43,12 +43,45 @@ export class Router {
         window.location.hash = query ? `#/${routeName}?${query}` : `#/${routeName}`;
     }
 
-    renderRoute(routeName, params = {}) {
+    async renderRoute(routeName, params = {}) {
         if (!this.routes[routeName]) return;
 
-        // Update active nav link (only for main top-level navs)
-        document.querySelectorAll('.nav-link').forEach(link => {
-            if (link.getAttribute('data-route') === routeName || link.getAttribute('href') === `#/${routeName}`) {
+        // Manage League Sub-Navigation Context
+        const leagueNav = document.getElementById('league-nav');
+        if (params.league) {
+            leagueNav.style.display = 'flex';
+            // Update Hrefs to maintain league context
+            document.getElementById('ln-home').href = `#/league_detail?league=${params.league}`;
+            document.getElementById('ln-draft').href = `#/draft?league=${params.league}`;
+            document.getElementById('ln-matchups').href = `#/matchups?league=${params.league}`;
+            document.getElementById('ln-proj').href = `#/projections?league=${params.league}`;
+            document.getElementById('ln-stats').href = `#/stats?league=${params.league}`;
+            
+            // Set active state for sub-nav
+            const currentHref = `#/${routeName}?league=${params.league}`;
+            document.querySelectorAll('#league-nav-links .nav-link').forEach(link => {
+                if (link.getAttribute('href') === currentHref || (routeName === 'league_detail' && link.id === 'ln-home')) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+
+            // Fetch League Name asynchronously to avoid blocking render
+            import('./supabase.js').then(({ supabase }) => {
+                if (supabase) {
+                    supabase.from('leagues').select('name').eq('id', params.league).single().then(({ data }) => {
+                        if (data) document.getElementById('league-nav-name').innerText = data.name;
+                    });
+                }
+            });
+        } else {
+            leagueNav.style.display = 'none';
+        }
+
+        // Update active nav link for global navs
+        document.querySelectorAll('#global-nav .nav-link').forEach(link => {
+            if (link.getAttribute('href') === `#/${routeName}`) {
                 link.classList.add('active');
             } else {
                 link.classList.remove('active');

@@ -18,22 +18,34 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Navigation Bar -->
-        <nav class="glass-nav">
+        <!-- Global Navigation Bar -->
+        <nav class="glass-nav" id="global-nav">
             <div class="nav-brand">
                 <span class="brand-text">WORST<span class="brand-highlight">QB</span></span>
             </div>
             <div class="nav-links">
+                <a href="#/dashboard" class="nav-link">My Leagues</a>
                 <a href="#/rules" class="nav-link">Rules</a>
-                <a href="#/dashboard" class="nav-link">Dashboard</a>
-                <a href="#/leagues" class="nav-link">Leagues</a>
-                <a href="#/draft" class="nav-link">Draft Room</a>
-                <a href="#/projections" class="nav-link">Projections</a>
-                <a href="#/stats" class="nav-link">Stats</a>
-                <a href="#/matchups" class="nav-link">Live Scores</a>
+                <!-- These will be useful for viewing general non-league data -->
+                <a href="#/projections" class="nav-link">Global Projections</a>
+                <a href="#/stats" class="nav-link">Global Stats</a>
             </div>
             <div class="nav-user">
                 <button id="auth-btn" class="btn btn-primary">Login</button>
+            </div>
+        </nav>
+
+        <!-- League Context Sub-Navigation (Hidden by default) -->
+        <nav class="glass-nav" id="league-nav" style="display: none; background: rgba(0,0,0,0.6); border-top: none; padding: 0.5rem 2rem;">
+            <div class="nav-links" style="font-size: 0.9rem;" id="league-nav-links">
+                <a href="#/league_detail" class="nav-link" id="ln-home">League Home</a>
+                <a href="#/draft" class="nav-link" id="ln-draft">Draft Room</a>
+                <a href="#/matchups" class="nav-link" id="ln-matchups">Matchups</a>
+                <a href="#/projections" class="nav-link" id="ln-proj">League Projections</a>
+                <a href="#/stats" class="nav-link" id="ln-stats">League Stats</a>
+            </div>
+            <div class="nav-user" style="font-size: 0.9rem; font-weight: bold; color: var(--accent-primary);" id="league-nav-name">
+                League Name
             </div>
         </nav>
 

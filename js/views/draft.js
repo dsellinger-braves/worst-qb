@@ -11,10 +11,19 @@ export const DraftView = {
                     <h1 style="margin-bottom: 0;">Draft Lobby</h1>
                     <p style="color: var(--text-secondary);">Build the worst roster possible.</p>
                 </div>
-                <select id="draft-league-select" style="background: rgba(0,0,0,0.5); color: var(--text-primary); border: 1px solid var(--glass-border); padding: 0.5rem; border-radius: 4px; min-width: 250px; font-size: 1rem;">
-                    <option value="">Loading leagues...</option>
-                </select>
+                <div id="draft-clock-banner" style="display: none; background: rgba(220, 38, 38, 0.2); border: 1px solid var(--danger-color); padding: 0.5rem 2rem; border-radius: 8px; align-items: center; gap: 1rem;">
+                    <span style="font-weight: bold; color: var(--danger-color); animation: pulse 2s infinite;">ON THE CLOCK:</span>
+                    <span id="draft-clock-team" style="font-size: 1.2rem; font-weight: bold;">Loading...</span>
+                </div>
             </div>
+
+            <style>
+                @keyframes pulse {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.5; }
+                    100% { opacity: 1; }
+                }
+            </style>
 
             <!-- Main Layout -->
             <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; align-items: start;" id="draft-grid">
@@ -98,8 +107,15 @@ export const DraftView = {
 
         </div>
     `,
-    init: async () => {
+    init: async (params = {}) => {
         if (!supabase) return;
+        
+        const leagueId = params.league;
+        if (!leagueId) {
+            document.getElementById('draft-grid').style.display = 'none';
+            document.getElementById('qb-list').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem;">Please select a league from your dashboard.</td></tr>';
+            return;
+        }
 
         // Apply media query dynamically for layout
         const style = document.createElement('style');
@@ -114,7 +130,7 @@ export const DraftView = {
         // Setup state
         DraftView.state = {
             userId: null,
-            leagueId: null,
+            leagueId: leagueId,
             leagueInfo: null,
             currentWeek: 1,
             scoringType: 'individual',
@@ -136,24 +152,6 @@ export const DraftView = {
             return;
         }
         DraftView.state.userId = session.user.id;
-
-        // Fetch user's leagues
-        const { data: userLeagues } = await supabase
-            .from('league_members')
-            .select('league_id, leagues(name, scoring_type, current_week, draft_status)')
-            .eq('user_id', session.user.id);
-
-        const selectEl = document.getElementById('draft-league-select');
-        
-        if (!userLeagues || userLeagues.length === 0) {
-            selectEl.innerHTML = '<option value="">Not in any leagues</option>';
-            document.getElementById('qb-list').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem;">You must join a league to draft.</td></tr>';
-            return;
-        }
-
-        selectEl.innerHTML = userLeagues.map(ul => 
-            `<option value="${ul.league_id}">${ul.leagues?.name} (${ul.leagues?.scoring_type === 'team_qb' ? 'Team' : 'Indiv'})</option>`
-        ).join('');
 
         // Modal Handlers
         const modal = document.getElementById('profile-modal');
@@ -189,14 +187,7 @@ export const DraftView = {
             });
         });
 
-        // Listen for league changes
-        selectEl.addEventListener('change', async () => {
-            DraftView.state.leagueId = selectEl.value;
-            await DraftView.loadLeagueData();
-        });
-        
         // Initial load
-        DraftView.state.leagueId = selectEl.value;
         await DraftView.loadLeagueData();
         
         // Realtime Subscription
@@ -343,6 +334,25 @@ export const DraftView = {
         renderSlot(document.getElementById('pick-2-slot'), 'Pick 2', p2);
     },
 
+    getDraftState: () => {
+        const { members, allPicks } = DraftView.state;
+        
+        // Check if Round 1 is complete
+        const everyoneHasRound1 = members.every(m => {
+            return (allPicks || []).filter(p => p.user_id === m.user_id).length >= 1;
+        });
+        const targetPicks = everyoneHasRound1 ? 2 : 1;
+        
+        for (let i = 0; i < members.length; i++) {
+            const member = members[i];
+            const theirPicks = (allPicks || []).filter(p => p.user_id === member.user_id);
+            if (theirPicks.length < targetPicks) {
+                return { isComplete: false, currentTurnUserId: member.user_id, currentTurnTeamName: member.team_name };
+            }
+        }
+        return { isComplete: true, currentTurnUserId: null, currentTurnTeamName: null };
+    },
+
     renderDraftOrder: () => {
         const listEl = document.getElementById('draft-order-list');
         const { members, allPicks, leagueInfo, userId, currentWeek } = DraftView.state;
@@ -363,6 +373,20 @@ export const DraftView = {
         }
 
         window.undoPick = DraftView.undoPick; // Expose for inline onClick
+        window.autoPick = DraftView.autoPick; // Expose auto-pick
+
+        const draftState = DraftView.getDraftState();
+        const banner = document.getElementById('draft-clock-banner');
+        if (draftState.isComplete) {
+            banner.style.display = 'none';
+        } else {
+            banner.style.display = 'flex';
+            let adminBtn = '';
+            if (isAdmin && draftState.currentTurnUserId !== userId) {
+                adminBtn = `<button class="btn btn-primary" style="font-size: 0.8rem; padding: 0.2rem 0.5rem;" onclick="autoPick('${draftState.currentTurnUserId}')">Admin Auto-Pick</button>`;
+            }
+            document.getElementById('draft-clock-team').innerHTML = `${draftState.currentTurnTeamName} ${adminBtn}`;
+        }
 
         listEl.innerHTML = members.map((m, idx) => {
             // Check if they drafted yet
@@ -374,11 +398,15 @@ export const DraftView = {
                 undoBtn = `<button class="btn" style="padding: 0.1rem 0.4rem; font-size: 0.7rem; background: var(--accent-error); border: none; margin-left: 0.5rem;" onclick="undoPick('${m.user_id}')" title="Undo latest pick">Undo</button>`;
             }
 
+            const isOnClock = draftState.currentTurnUserId === m.user_id;
+            const bgStyle = isOnClock ? 'background: rgba(220, 38, 38, 0.2); border: 1px solid var(--danger-color);' : 'background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);';
+            const nameColor = isOnClock ? 'color: white; font-weight: bold;' : '';
+
             return `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-radius: 4px; ${bgStyle}">
                 <div>
                     <span style="font-weight: bold; color: var(--text-secondary); margin-right: 0.5rem;">${idx + 1}.</span>
-                    <span style="font-size: 0.9rem;">${m.team_name}</span>
+                    <span style="font-size: 0.9rem; ${nameColor}">${m.team_name}</span>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                     <span style="font-size: 0.8rem; color: var(--text-secondary);">${m.season_points.toFixed(2)} pts</span>
@@ -449,31 +477,11 @@ export const DraftView = {
         }
 
         // Determine if it's the user's turn
-        let isMyTurn = false;
-        let waitingOn = null;
-        const myIndex = members.findIndex(m => m.user_id === DraftView.state.userId);
-        
-        if (myIndex !== -1 && myPicks.length < 2) {
-            // Check if Round 1 is complete (everyone has at least 1 pick)
-            const everyoneHasRound1 = members.every(m => {
-                return (allPicks || []).filter(p => p.user_id === m.user_id).length >= 1;
-            });
-            
-            const targetPicks = everyoneHasRound1 ? 2 : 1;
-            
-            if (myPicks.length < targetPicks) {
-                isMyTurn = true;
-                for (let i = 0; i < myIndex; i++) {
-                    const memberAhead = members[i];
-                    const theirPicks = (allPicks || []).filter(p => p.user_id === memberAhead.user_id);
-                    if (theirPicks.length < targetPicks) {
-                        isMyTurn = false;
-                        waitingOn = memberAhead.team_name;
-                        break;
-                    }
-                }
-            }
-        }
+        const draftState = DraftView.getDraftState();
+        const isMyTurn = draftState.currentTurnUserId === DraftView.state.userId;
+        const waitingOn = draftState.currentTurnTeamName;
+        const { leagueInfo, userId } = DraftView.state;
+        const isAdmin = leagueInfo?.created_by === userId;
 
         window.draftPlayer = DraftView.draftPlayer; // Expose for inline onClick
         window.openProfile = DraftView.openProfile; 
@@ -485,12 +493,16 @@ export const DraftView = {
                 : `<div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">🏈</div>`;
 
             let draftButtonHtml = '';
-            if (myPicks.length >= 2) {
+            if (myPicks.length >= 2 && !isAdmin) {
                 draftButtonHtml = `<button class="btn" disabled style="background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;">Full</button>`;
             } else if (!isMyTurn) {
-                draftButtonHtml = `<button class="btn" disabled style="background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;" title="Waiting on ${waitingOn || 'someone else'}">Wait</button>`;
+                if (isAdmin && !draftState.isComplete) {
+                    draftButtonHtml = `<button class="btn" style="background: var(--danger-color); color: white;" onclick="draftPlayer('${p.id}', '${draftState.currentTurnUserId}')">Force Draft</button>`;
+                } else {
+                    draftButtonHtml = `<button class="btn" disabled style="background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;" title="Waiting on ${waitingOn || 'someone else'}">Wait</button>`;
+                }
             } else {
-                draftButtonHtml = `<button class="btn btn-primary" onclick="draftPlayer('${p.id}')">+ Draft</button>`;
+                draftButtonHtml = `<button class="btn btn-primary" onclick="draftPlayer('${p.id}', '${userId}')">+ Draft</button>`;
             }
 
             return `
@@ -512,41 +524,30 @@ export const DraftView = {
         `}).join('');
     },
 
-    draftPlayer: async (playerId) => {
-        const { leagueId, currentWeek, userId, myPicks, members, allPicks } = DraftView.state;
-        if (myPicks.length >= 2) {
-            alert("You have already drafted 2 players for this week.");
+    draftPlayer: async (playerId, overrideUserId = null) => {
+        const { leagueId, currentWeek, userId, allPicks, members, leagueInfo } = DraftView.state;
+        
+        const targetUserId = overrideUserId || userId;
+        const targetPicks = allPicks.filter(p => p.user_id === targetUserId);
+        const isAdmin = leagueInfo?.created_by === userId;
+
+        if (targetPicks.length >= 2) {
+            alert("This team has already drafted 2 players for this week.");
             return;
         }
 
         // Strict Turn Validation
-        const myIndex = members.findIndex(m => m.user_id === userId);
-        if (myIndex === -1) {
-            alert("You are not a member of this league.");
+        const draftState = DraftView.getDraftState();
+        if (draftState.currentTurnUserId !== targetUserId) {
+            alert(`It is not ${targetUserId === userId ? 'your' : 'their'} turn yet! Waiting on ${draftState.currentTurnTeamName}.`);
             return;
         }
 
-        const everyoneHasRound1 = members.every(m => {
-            return (allPicks || []).filter(p => p.user_id === m.user_id).length >= 1;
-        });
-        const targetPicks = everyoneHasRound1 ? 2 : 1;
-
-        if (myPicks.length < targetPicks) {
-            for (let i = 0; i < myIndex; i++) {
-                const memberAhead = members[i];
-                const theirPicks = (allPicks || []).filter(p => p.user_id === memberAhead.user_id);
-                if (theirPicks.length < targetPicks) {
-                    alert(`It is not your turn yet! Waiting on ${memberAhead.team_name}.`);
-                    return;
-                }
-            }
-        }
-
-        const pickNum = myPicks.find(p => p.pick_number === 1) ? 2 : 1;
+        const pickNum = targetPicks.find(p => p.pick_number === 1) ? 2 : 1;
 
         const pickData = {
             league_id: leagueId,
-            user_id: userId,
+            user_id: targetUserId,
             player_id: playerId,
             week: currentWeek,
             pick_number: pickNum
@@ -597,6 +598,43 @@ export const DraftView = {
             await DraftView.fetchPicks();
             DraftView.renderDraftOrder();
             DraftView.renderPlayerPool();
+        }
+    },
+
+    autoPick: async (targetUserId) => {
+        const { players, projections, allPicks, rawStats, leagueInfo, userId } = DraftView.state;
+        
+        if (leagueInfo?.created_by !== userId) {
+            alert("Only admins can auto-pick.");
+            return;
+        }
+
+        const draftedIds = new Set((allPicks || []).map(p => p.player_id));
+        let available = players.filter(p => !draftedIds.has(p.id));
+        
+        // Find the best QB with >= 10 projected attempts
+        available = available.filter(p => {
+            if (!p.position || !p.position.includes('QB') || p.position.includes('TM_QB')) return false;
+            const raw = rawStats[p.id];
+            if (!raw || (raw.attempts || 0) < 10) return false;
+            return true;
+        });
+
+        if (available.length === 0) {
+            alert("No available QBs with >= 10 projected attempts found. You will need to force pick manually.");
+            return;
+        }
+
+        available.sort((a, b) => {
+            const pA = projections[a.id] || -999;
+            const pB = projections[b.id] || -999;
+            return pB - pA; // Descending points (higher is better for "worst QB")
+        });
+
+        const bestQb = available[0];
+        const confirmed = confirm(`Auto-Pick will select ${bestQb.name} (${(projections[bestQb.id] || 0).toFixed(2)} pts). Proceed?`);
+        if (confirmed) {
+            await DraftView.draftPlayer(bestQb.id, targetUserId);
         }
     },
 
