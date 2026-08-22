@@ -146,7 +146,7 @@ def scrape_espn_projections(year, current_week):
     
     # Remove filterSlotIds and limit to grab every player
     headers = {
-        'X-Fantasy-Filter': '{"players":{"sortPercOwned":{"sortPriority":1,"sortAsc":false}}}',
+        'X-Fantasy-Filter': '{"players":{"limit":3000,"sortPercOwned":{"sortPriority":1,"sortAsc":false}}}',
         'User-Agent': 'Mozilla/5.0'
     }
     

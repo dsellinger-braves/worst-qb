@@ -91,7 +91,7 @@ export const DraftView = {
             <!-- Inset Player Profile Modal -->
             <div id="profile-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 2rem;">
                 <div style="background: var(--bg-main); width: 100%; max-width: 1000px; max-height: 90vh; overflow-y: auto; border-radius: 16px; position: relative; border: 1px solid var(--glass-border); box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
-                    <button id="profile-modal-close" class="btn" style="position: absolute; top: 1.5rem; right: 1.5rem; z-index: 10; padding: 0.5rem 1rem; background: rgba(0,0,0,0.5); border: 1px solid var(--glass-border);"><span style="font-size: 1.2rem;">✕</span> Close</button>
+                    <button id="profile-modal-close" class="btn" style="position: absolute; top: 1rem; right: 1rem; z-index: 10; width: 40px; height: 40px; border-radius: 50%; background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; color: white; padding: 0; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.9)'; this.style.transform='scale(1.05)';" onmouseout="this.style.background='rgba(0,0,0,0.6)'; this.style.transform='scale(1)';"><span style="font-size: 1.2rem; line-height: 1;">✕</span></button>
                     <div id="profile-modal-content"></div>
                 </div>
             </div>
