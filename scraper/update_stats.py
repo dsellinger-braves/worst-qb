@@ -424,7 +424,7 @@ def main():
                 'id': player_id,
                 'name': row.get('name', 'Unknown'),
                 'team': row.get('team', 'FA'),
-                'position': 'QB', # Default to QB for stats since we don't have position data in gamecast easily
+                'position': 'Unknown', # Default to Unknown for stats since we don't have position data in gamecast easily
                 'headshot_url': row.get('headshot', ''),
                 'height': '', 'weight': 0, 'college': '', 'age': 0
             }
