@@ -9,6 +9,8 @@ import { RulesView } from './views/rules.js';
 import { Router } from './router.js';
 import { supabase } from './supabase.js';
 
+import { SettingsView } from './views/settings.js';
+
 // Define Routes
 const routes = {
     'dashboard': DashboardView,
@@ -19,6 +21,7 @@ const routes = {
     'player_profile': PlayerProfileView,
     'draft': DraftView,
     'rules': RulesView,
+    'settings': SettingsView,
     'matchups': {
         render: () => `<div class="view-container active glass-panel"><h1>Live Scores</h1><p>Live stats feed will appear here during games.</p></div>`,
         init: () => {}
@@ -34,12 +37,77 @@ router.handleHashChange();
 
 // Authentication Handler
 const authBtn = document.getElementById('auth-btn');
+const settingsLink = document.getElementById('nav-settings');
+const authModal = document.getElementById('auth-modal');
+const authForm = document.getElementById('auth-form');
+const authTitle = document.getElementById('auth-title');
+const authSubmitBtn = document.getElementById('auth-submit-btn');
+const authSwitchMode = document.getElementById('auth-switch-mode');
+const authSwitchText = document.getElementById('auth-switch-text');
+const authOptInContainer = document.getElementById('auth-opt-in-container');
+const authCloseBtn = document.getElementById('auth-close-btn');
+
+let isSignUp = false;
+
+authSwitchMode.onclick = (e) => {
+    e.preventDefault();
+    isSignUp = !isSignUp;
+    if (isSignUp) {
+        authTitle.innerText = 'Create Account';
+        authSubmitBtn.innerText = 'Sign Up';
+        authSwitchText.innerText = 'Already have an account?';
+        authSwitchMode.innerText = 'Login';
+        authOptInContainer.style.display = 'block';
+    } else {
+        authTitle.innerText = 'Login';
+        authSubmitBtn.innerText = 'Login';
+        authSwitchText.innerText = "Don't have an account?";
+        authSwitchMode.innerText = 'Sign up';
+        authOptInContainer.style.display = 'none';
+    }
+};
+
+authCloseBtn.onclick = () => {
+    authModal.style.display = 'none';
+};
+
+authForm.onsubmit = async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+    const optIn = document.getElementById('auth-opt-in').checked;
+    
+    if (isSignUp) {
+        const { error: signUpError } = await supabase.auth.signUp({ 
+            email, 
+            password,
+            options: {
+                data: {
+                    email_opt_in: optIn
+                }
+            }
+        });
+        if (signUpError) alert(signUpError.message);
+        else {
+            alert("Signup successful!");
+            authModal.style.display = 'none';
+        }
+    } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) alert(error.message);
+        else {
+            authModal.style.display = 'none';
+            router.navigate('dashboard');
+        }
+    }
+};
 
 const updateAuthUI = async () => {
     if (!supabase) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
         authBtn.innerText = 'Logout';
+        settingsLink.style.display = 'inline-block';
         authBtn.onclick = async () => {
             await supabase.auth.signOut();
             updateAuthUI();
@@ -47,22 +115,9 @@ const updateAuthUI = async () => {
         };
     } else {
         authBtn.innerText = 'Login';
-        authBtn.onclick = async () => {
-            const email = prompt("Enter email:");
-            const password = prompt("Enter password (minimum 6 chars):");
-            if (email && password) {
-                const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-                if (error && error.message.includes("Invalid login")) {
-                    // Try signup if login fails for demo purposes
-                    const { error: signUpError } = await supabase.auth.signUp({ email, password });
-                    if (signUpError) alert(signUpError.message);
-                    else alert("Signup successful! Please check email for confirmation or login if auto-confirmed.");
-                } else if (error) {
-                    alert(error.message);
-                }
-                updateAuthUI();
-                router.navigate('dashboard');
-            }
+        settingsLink.style.display = 'none';
+        authBtn.onclick = () => {
+            authModal.style.display = 'flex';
         };
     }
 };
