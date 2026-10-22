@@ -236,13 +236,51 @@ export const DraftView = {
         DraftView.state.scoringType = league.scoring_type;
         document.getElementById('draft-week').innerText = DraftView.state.currentWeek;
 
-        // Fetch league members for draft order
+        // Fetch league members
         const { data: members } = await supabase.from('league_members')
-            .select('user_id, team_name, season_points')
-            .eq('league_id', leagueId)
-            .order('season_points', { ascending: true }); // Lowest points (worst teams) first
-        
-        let sortedMembers = members || [];
+            .select('user_id, team_name, season_points, is_admin')
+            .eq('league_id', leagueId);
+
+        // Compute live season points from all historical regular season picks for dynamic draft order
+        const { data: allLeaguePicks } = await supabase.from('draft_picks')
+            .select('week, user_id, player_id')
+            .eq('league_id', leagueId);
+
+        const leaguePickedPlayerIds = [...new Set((allLeaguePicks || []).map(p => p.player_id).filter(Boolean))];
+        const leagueStatsMap = {};
+        if (leaguePickedPlayerIds.length > 0) {
+            const chunkSize = 200;
+            for (let i = 0; i < leaguePickedPlayerIds.length; i += chunkSize) {
+                const chunk = leaguePickedPlayerIds.slice(i, i + chunkSize);
+                const { data: stData } = await supabase.from('player_stats')
+                    .select('*')
+                    .in('player_id', chunk)
+                    .eq('season_type', 'regular');
+                if (stData) {
+                    stData.forEach(s => {
+                        leagueStatsMap[`${s.player_id}_${s.week}`] = s;
+                    });
+                }
+            }
+        }
+
+        // Calculate live points for each member
+        const liveTotals = {};
+        (members || []).forEach(m => { liveTotals[m.user_id] = 0; });
+        (allLeaguePicks || []).forEach(p => {
+            const st = leagueStatsMap[`${p.player_id}_${p.week}`];
+            const pts = calculateLeagueScore(st, league.scoring_settings);
+            if (liveTotals[p.user_id] !== undefined) {
+                liveTotals[p.user_id] += pts;
+            }
+        });
+
+        let sortedMembers = (members || []).map(m => ({
+            ...m,
+            season_points: liveTotals[m.user_id] !== undefined ? liveTotals[m.user_id] : (m.season_points || 0)
+        }));
+
+        sortedMembers.sort((a, b) => a.season_points - b.season_points); // Lowest points (worst teams) first
         
         // Apply manual override if it exists
         const overrides = league.scoring_settings?.draft_order_overrides || {};
@@ -286,10 +324,27 @@ export const DraftView = {
         const { currentWeek } = DraftView.state;
         document.getElementById('qb-list').innerHTML = '<tr><td colspan="3" style="padding: 2rem; text-align: center;"><div class="spinner" style="margin: 0 auto;"></div></td></tr>';
 
-        // Fetch ALL players and projections
-        const [{ data: players }, { data: projections }] = await Promise.all([
-            supabase.from('players').select('*'),
-            supabase.from('player_projections').select('*').eq('week', currentWeek)
+        // Paged fetch helper to avoid 1000-row PostgREST truncation
+        const fetchAllPaged = async (table, filterFn = null) => {
+            let all = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
+            while (hasMore) {
+                let q = supabase.from(table).select('*').range(page * pageSize, (page + 1) * pageSize - 1);
+                if (filterFn) q = filterFn(q);
+                const { data, error } = await q;
+                if (error || !data) break;
+                all = all.concat(data);
+                if (data.length < pageSize) hasMore = false;
+                else page++;
+            }
+            return all;
+        };
+
+        const [players, projections] = await Promise.all([
+            fetchAllPaged('players'),
+            fetchAllPaged('player_projections', q => q.eq('week', currentWeek))
         ]);
         
         DraftView.state.players = players || [];
@@ -353,10 +408,15 @@ export const DraftView = {
         return { isComplete: true, currentTurnUserId: null, currentTurnTeamName: null };
     },
 
+    checkIsAdmin: () => {
+        const myMember = DraftView.state.members?.find(m => m.user_id === DraftView.state.userId);
+        return (DraftView.state.leagueInfo?.created_by === DraftView.state.userId) || !!(myMember && myMember.is_admin);
+    },
+
     renderDraftOrder: () => {
         const listEl = document.getElementById('draft-order-list');
         const { members, allPicks, leagueInfo, userId, currentWeek } = DraftView.state;
-        const isAdmin = leagueInfo?.created_by === userId;
+        const isAdmin = DraftView.checkIsAdmin();
         
         const overrides = leagueInfo?.scoring_settings?.draft_order_overrides || {};
         if (overrides[currentWeek]) {
@@ -481,7 +541,7 @@ export const DraftView = {
         const isMyTurn = draftState.currentTurnUserId === DraftView.state.userId;
         const waitingOn = draftState.currentTurnTeamName;
         const { leagueInfo, userId } = DraftView.state;
-        const isAdmin = leagueInfo?.created_by === userId;
+        const isAdmin = DraftView.checkIsAdmin();
 
         window.draftPlayer = DraftView.draftPlayer; // Expose for inline onClick
         window.openProfile = DraftView.openProfile; 
@@ -529,7 +589,7 @@ export const DraftView = {
         
         const targetUserId = overrideUserId || userId;
         const targetPicks = allPicks.filter(p => p.user_id === targetUserId);
-        const isAdmin = leagueInfo?.created_by === userId;
+        const isAdmin = DraftView.checkIsAdmin();
 
         if (targetPicks.length >= 2) {
             alert("This team has already drafted 2 players for this week.");
@@ -604,7 +664,7 @@ export const DraftView = {
     autoPick: async (targetUserId) => {
         const { players, projections, allPicks, rawStats, leagueInfo, userId } = DraftView.state;
         
-        if (leagueInfo?.created_by !== userId) {
+        if (!DraftView.checkIsAdmin()) {
             alert("Only admins can auto-pick.");
             return;
         }

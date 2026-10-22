@@ -9,7 +9,8 @@ export const LeagueDetailView = {
                     <h1 id="ld-title">Loading League...</h1>
                     <p id="ld-status" style="color: var(--text-secondary);"></p>
                 </div>
-                <div style="display: flex; gap: 1rem;">
+                <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <button id="ld-advance-week-btn" class="btn" style="display: none; background: rgba(56, 189, 248, 0.2); color: var(--accent-secondary); border: 1px solid var(--accent-secondary);">Advance Week</button>
                     <button id="ld-settings-btn" class="btn" style="display: none;">League Settings</button>
                     <button id="ld-draft-btn" class="btn btn-primary" style="display: none;">Enter Draft Room</button>
                 </div>
@@ -167,16 +168,64 @@ export const LeagueDetailView = {
             .eq('league_id', leagueId);
         if (teams) {
             LeagueDetailView.teams = teams;
-            // Check if current user is admin
+            // Check if current user is admin (league creator or has is_admin flag)
             const myMember = teams.find(t => t.user_id === currentUserId);
-            if (myMember && myMember.is_admin) isAdmin = true;
+            if ((league.created_by && league.created_by === currentUserId) || (myMember && myMember.is_admin)) {
+                isAdmin = true;
+            }
         }
 
-        // Setup Admin Settings UI
+        // Setup Admin Settings UI and Advance Week
         if (isAdmin) {
             const settingsBtn = document.getElementById('ld-settings-btn');
             settingsBtn.style.display = 'block';
             LeagueDetailView.setupAdminSettings(league);
+
+            const advanceBtn = document.getElementById('ld-advance-week-btn');
+            advanceBtn.style.display = 'block';
+            const currentWeek = league.current_week || 1;
+            const nextWeek = currentWeek + 1;
+            
+            if (currentWeek >= 18) {
+                advanceBtn.innerText = 'Season Complete (Wk 18)';
+                advanceBtn.disabled = true;
+                advanceBtn.style.opacity = '0.5';
+                advanceBtn.style.cursor = 'not-allowed';
+            } else {
+                advanceBtn.innerText = `Advance to Week ${nextWeek}`;
+                advanceBtn.onclick = async () => {
+                    const confirmed = confirm(
+                        `Are you sure you want to advance ${league.name} to Week ${nextWeek}?\n\n` +
+                        `This will save all teams' current calculated season points to the database and set the active draft week to Week ${nextWeek}.`
+                    );
+                    if (!confirmed) return;
+
+                    advanceBtn.disabled = true;
+                    advanceBtn.innerText = 'Advancing...';
+
+                    // 1. Save dynamic season points for all teams
+                    for (const team of LeagueDetailView.teams) {
+                        await supabase.from('league_members')
+                            .update({ season_points: parseFloat(team.season_points.toFixed(2)) })
+                            .eq('league_id', leagueId)
+                            .eq('user_id', team.user_id);
+                    }
+
+                    // 2. Increment league current_week and reset draft_status
+                    const { error: advErr } = await supabase.from('leagues')
+                        .update({ current_week: nextWeek, draft_status: 'pending' })
+                        .eq('id', leagueId);
+
+                    if (advErr) {
+                        alert("Error advancing week: " + advErr.message);
+                        advanceBtn.disabled = false;
+                        advanceBtn.innerText = `Advance to Week ${nextWeek}`;
+                    } else {
+                        alert(`Successfully advanced to Week ${nextWeek}! Season points saved.`);
+                        LeagueDetailView.init({ league: leagueId });
+                    }
+                };
+            }
         }
 
         // Fetch Draft Picks
@@ -187,15 +236,24 @@ export const LeagueDetailView = {
             
         if (pErr) console.error("Error fetching picks:", pErr);
             
-        // Fetch ALL Player Stats to calculate dynamic points
-        const { data: statsData } = await supabase.from('player_stats')
-            .select('*');
-            
+        // Fetch Regular Season Player Stats for all drafted players (targeted query avoids 1000-row limit)
+        const pickedPlayerIds = [...new Set((picks || []).map(p => p.player_id).filter(Boolean))];
         const statsMap = {}; // key: "player_id_week" -> stats object
-        if (statsData) {
-            statsData.forEach(s => {
-                statsMap[`${s.player_id}_${s.week}`] = s;
-            });
+        
+        if (pickedPlayerIds.length > 0) {
+            const chunkSize = 200;
+            for (let i = 0; i < pickedPlayerIds.length; i += chunkSize) {
+                const chunk = pickedPlayerIds.slice(i, i + chunkSize);
+                const { data: statsData } = await supabase.from('player_stats')
+                    .select('*')
+                    .in('player_id', chunk)
+                    .eq('season_type', 'regular');
+                if (statsData) {
+                    statsData.forEach(s => {
+                        statsMap[`${s.player_id}_${s.week}`] = s;
+                    });
+                }
+            }
         }
         
         if (picks && picks.length > 0) {
@@ -263,11 +321,11 @@ export const LeagueDetailView = {
             const s = league.scoring_settings || {};
             document.getElementById('s-pass-yds').value = s.pass_yds ?? -0.05;
             document.getElementById('s-pass-tds').value = s.pass_tds ?? -5.0;
-            document.getElementById('s-ints').value = s.ints ?? 3.0;
-            document.getElementById('s-pick-sixes').value = s.pick_sixes ?? 5.0;
+            document.getElementById('s-ints').value = s.ints ?? 5.0;
+            document.getElementById('s-pick-sixes').value = s.pick_sixes ?? 10.0;
             document.getElementById('s-rush-yds').value = s.rush_yds ?? -0.1;
             document.getElementById('s-rush-tds').value = s.rush_tds ?? -5.0;
-            document.getElementById('s-fumbles').value = s.fumbles_lost ?? 3.0;
+            document.getElementById('s-fumbles').value = s.fumbles_lost ?? 4.0;
             document.getElementById('s-sacks').value = s.sacks ?? 1.0;
             document.getElementById('s-team-loss').value = s.team_loss ?? 5.0;
             document.getElementById('s-no-att').value = s.no_attempts ?? -20.0;
@@ -370,7 +428,7 @@ export const LeagueDetailView = {
                 alert("Error saving settings.");
             } else {
                 modal.style.display = 'none';
-                LeagueDetailView.init({ id: league.id }); // Reload to recalculate
+                LeagueDetailView.init({ league: league.id }); // Reload to recalculate
             }
         };
     },

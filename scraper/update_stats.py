@@ -457,9 +457,11 @@ def main():
         
     # Aggregate Team QBs
     team_stats_dict = {}
-    for row in records_to_upsert:
+    for row in all_game_stats:
         team = row.get('team')
         if not team or team == 'FA': continue
+        if row['attempts'] == 0 and row['rushing_yards'] == 0 and row['fumbles_lost'] == 0:
+            continue
             
         week = row['week']
         season_type = row['season_type']
@@ -481,7 +483,7 @@ def main():
                 'rushing_tds': 0,
                 'fumbles_lost': 0,
                 'sacks': 0,
-                'team_loss': row['team_loss']
+                'team_loss': bool(row.get('team_loss', False))
             }
             
         ts = team_stats_dict[key]
@@ -490,10 +492,13 @@ def main():
         ts['passing_yards'] += row['passing_yards']
         ts['passing_tds'] += row['passing_tds']
         ts['interceptions'] += row['interceptions']
+        ts['pick_sixes'] += row.get('pick_sixes', 0)
         ts['rushing_yards'] += row['rushing_yards']
         ts['rushing_tds'] += row['rushing_tds']
         ts['fumbles_lost'] += row['fumbles_lost']
         ts['sacks'] += row['sacks']
+        if row.get('team_loss'):
+            ts['team_loss'] = True
 
     # Upsert Team QB players and their stats
     for key, ts in team_stats_dict.items():

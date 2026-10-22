@@ -6,7 +6,11 @@
     --text-secondary: #94a3b8;
     --accent-primary: #ef4444; /* A bright red for "Worst QB" vibes */
     --accent-hover: #dc2626;
+    --accent-secondary: #38bdf8; /* Vibrant light blue */
     --accent-success: #10b981;
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+    --accent-error: #dc2626;
     --glass-bg: rgba(21, 26, 40, 0.7);
     --glass-border: rgba(255, 255, 255, 0.1);
     

@@ -20,11 +20,35 @@ def get_supabase_client() -> Client:
         
     return create_client(url, key)
 
+def calculate_league_score(stats, settings):
+    if not stats:
+        return 0.0
+    attempts = stats.get('attempts', 0)
+    if attempts <= 0:
+        return float(settings.get('no_attempts', -20.0))
+        
+    pts = 0.0
+    pts += stats.get('passing_yards', 0) * float(settings.get('pass_yds', -0.05))
+    pts += stats.get('passing_tds', 0) * float(settings.get('pass_tds', -5.0))
+    pts += stats.get('interceptions', 0) * float(settings.get('ints', 5.0))
+    pts += stats.get('pick_sixes', 0) * float(settings.get('pick_sixes', 10.0))
+    pts += stats.get('rushing_yards', 0) * float(settings.get('rush_yds', -0.1))
+    pts += stats.get('rushing_tds', 0) * float(settings.get('rush_tds', -5.0))
+    pts += stats.get('fumbles_lost', 0) * float(settings.get('fumbles_lost', 4.0))
+    pts += stats.get('sacks', 0) * float(settings.get('sacks', 1.0))
+    if stats.get('team_loss'):
+        pts += float(settings.get('team_loss', 5.0))
+        
+    comp_pct = stats.get('completions', 0) / attempts
+    pts += float(settings.get('completion_penalty_multiplier', 20.0)) * (1.0 - comp_pct)
+    return round(pts, 2)
+
 def get_league_data(supabase: Client, league_id: str):
     # Get league details
     league_res = supabase.table('leagues').select('*').eq('id', league_id).single().execute()
     league = league_res.data
     current_week = league['current_week']
+    settings = league.get('scoring_settings') or {}
     
     # Get members and their YTD points
     members_res = supabase.table('league_members').select('*').eq('league_id', league_id).order('season_points', desc=True).execute()
@@ -34,21 +58,20 @@ def get_league_data(supabase: Client, league_id: str):
     picks_res = supabase.table('draft_picks').select('*, players(name)').eq('league_id', league_id).eq('week', current_week).execute()
     picks = picks_res.data
     
-    # Get player stats for this week
-    stats_res = supabase.table('player_stats').select('*').eq('week', current_week).execute()
+    # Get regular season player stats for this week
+    stats_res = supabase.table('player_stats').select('*').eq('week', current_week).eq('season_type', 'regular').execute()
     stats = { s['player_id']: s for s in stats_res.data }
     
-    # Aggregate weekly points for each member
+    # Aggregate weekly points for each member using league scoring settings
     weekly_scores = {}
     for member in members:
         uid = member['user_id']
         member_picks = [p for p in picks if p['user_id'] == uid]
-        pts = 0
+        pts = 0.0
         for p in member_picks:
             stat = stats.get(p['player_id'])
             if stat:
-                # Custom points is already calculated by the scraper
-                pts += stat.get('custom_points', 0)
+                pts += calculate_league_score(stat, settings)
         weekly_scores[uid] = {
             'team_name': member['team_name'],
             'points': pts,
@@ -112,21 +135,22 @@ def send_email(recipients, subject, html_content):
         print("Missing GMAIL_USER or GMAIL_APP_PASSWORD. Cannot send email.")
         return
         
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
-    msg['From'] = sender
-    msg['To'] = ", ".join(recipients)
-    
-    part = MIMEText(html_content, 'html')
-    msg.attach(part)
-    
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender, password)
-        server.sendmail(sender, recipients, msg.as_string())
+        
+        for recipient in recipients:
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = sender
+            msg['To'] = recipient
+            part = MIMEText(html_content, 'html')
+            msg.attach(part)
+            server.sendmail(sender, [recipient], msg.as_string())
+            
         server.quit()
-        print(f"Successfully sent email to {len(recipients)} recipients.")
+        print(f"Successfully sent individual emails to {len(recipients)} recipients.")
     except Exception as e:
         print(f"Failed to send email: {e}")
 
