@@ -5,8 +5,8 @@ export const StatsView = {
         <div class="view-container active glass-panel">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                 <div>
-                    <h1>Global QB Leaderboard</h1>
-                    <p>Year-To-Date (YTD) stats for all eligible quarterbacks.</p>
+                    <h1>2026 Global QB Leaderboard</h1>
+                    <p>2026 Season-To-Date (YTD) stats for all eligible quarterbacks.</p>
                 </div>
                 <div>
                     <label for="stats-view-select" style="font-weight: bold; margin-right: 0.5rem;">View:</label>
@@ -37,7 +37,7 @@ export const StatsView = {
                         </tr>
                     </thead>
                     <tbody id="stats-table-body">
-                        <tr><td colspan="9" style="text-align: center; padding: 2rem;">Loading stats...</td></tr>
+                        <tr><td colspan="12" style="text-align: center; padding: 2rem;">Loading stats...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -81,7 +81,10 @@ export const StatsView = {
             let aggregatedArray = [];
             
             if (viewType === 'WEEKLY') {
-                const filteredData = StatsView.rawData.filter(stat => stat.players?.position === 'QB' && stat.season_type !== 'preseason');
+                const filteredData = StatsView.rawData.filter(stat => {
+                    const pos = stat.players?.position || '';
+                    return (pos.includes('QB') && pos !== 'TM_QB') && stat.season_type !== 'preseason';
+                });
                 aggregatedArray = filteredData.map(stat => ({
                     id: stat.player_id,
                     name: `${stat.players?.name || 'Unknown'} (Wk ${stat.week})`,
@@ -99,7 +102,13 @@ export const StatsView = {
                 }));
             } else {
                 // Filter data by position and exclude preseason
-                const filteredData = StatsView.rawData.filter(stat => stat.players?.position === viewType && stat.season_type !== 'preseason');
+                const filteredData = StatsView.rawData.filter(stat => {
+                    const pos = stat.players?.position || '';
+                    if (stat.season_type === 'preseason') return false;
+                    if (viewType === 'QB') return pos.includes('QB') && pos !== 'TM_QB';
+                    if (viewType === 'TM_QB') return pos === 'TM_QB';
+                    return pos === viewType;
+                });
     
                 // Aggregate stats by player
                 const aggregated = filteredData.reduce((acc, stat) => {

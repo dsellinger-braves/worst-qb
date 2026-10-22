@@ -18,7 +18,7 @@ export const PlayerProfileView = {
             
             <div class="glass-panel">
                 <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--glass-border); padding-bottom: 1rem;">
-                    <button class="btn" id="tab-gamelog" onclick="switchProfileTab('gamelog')" style="background: rgba(255,255,255,0.1); color: var(--text-secondary);">Historical Game Logs</button>
+                    <button class="btn" id="tab-gamelog" onclick="switchProfileTab('gamelog')" style="background: rgba(255,255,255,0.1); color: var(--text-secondary);">2026 Game Log</button>
                     <button class="btn btn-primary" id="tab-projections" onclick="switchProfileTab('projections')">2026 Projections</button>
                 </div>
 
@@ -183,7 +183,7 @@ export const PlayerProfileView = {
         
         tbody.innerHTML += `
             <tr style="background: rgba(255,255,255,0.05); border-top: 2px solid var(--glass-border);">
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">Total (Reg Season)</td>
+                <td style="padding: 1rem 0.5rem; font-weight: bold;">2026 Regular Season Total</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalCmp} / ${totalAtt}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalYds}</td>
                 <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalTds}</td>

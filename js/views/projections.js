@@ -3,8 +3,8 @@ import { supabase } from '../supabase.js';
 export const ProjectionsView = {
     render: () => `
         <div class="view-container active glass-panel">
-            <h1>Weekly Projections</h1>
-            <p>Projected Worst QB points for the upcoming week based on ESPN.</p>
+            <h1>2026 Weekly Projections</h1>
+            <p>Projected Worst QB points for the 2026 NFL season based on ESPN.</p>
             
             <div style="display: flex; gap: 1rem; align-items: center; margin-top: 1rem; flex-wrap: wrap;">
                 <select id="proj-week-filter" class="form-input" style="width: auto;" onchange="ProjectionsView.processAndRender()"></select>
@@ -69,7 +69,11 @@ export const ProjectionsView = {
         const availableWeeks = [...new Set(ProjectionsView.rawData.map(d => d.week))].sort((a,b) => a - b);
         const weekSelect = document.getElementById('proj-week-filter');
         weekSelect.innerHTML = availableWeeks.map(w => `<option value="${w}" style="background: var(--bg-secondary); color: var(--text-primary);">Week ${w}</option>`).join('');
-        if (availableWeeks.length > 0) weekSelect.value = availableWeeks[0]; // Default to upcoming week
+        if (availableWeeks.includes(7)) {
+            weekSelect.value = '7';
+        } else if (availableWeeks.length > 0) {
+            weekSelect.value = availableWeeks[0];
+        }
         
         ProjectionsView.sortCol = 'pts';
         ProjectionsView.sortAsc = false;

@@ -1,6 +1,4 @@
 import os
-import nfl_data_py as nfl
-import pandas as pd
 from supabase import create_client, Client
 import requests
 from bs4 import BeautifulSoup
@@ -164,7 +162,7 @@ def scrape_espn_projections(year, current_week):
                 pro_team_id = player.get('proTeamId', 0)
                 stats = player.get('stats', [])
                 for s in stats:
-                    if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1:
+                    if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1 and s.get('seasonId') == year:
                         week = s.get('scoringPeriodId')
                         proj_stats = s.get('stats', {})
                         sacks = float(proj_stats.get('99', 0))
@@ -199,15 +197,17 @@ def scrape_espn_projections(year, current_week):
             
             player_projections = []
             
-            # Find the projected stats for all weeks (statSourceId = 1, statSplitTypeId = 1)
+            # Find the projected stats for all weeks for the specified season (statSourceId = 1, statSplitTypeId = 1, seasonId = year)
             stats = player.get('stats', [])
+            seen_weeks = set()
             for s in stats:
-                if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1:
+                if s.get('statSourceId') == 1 and s.get('statSplitTypeId') == 1 and s.get('seasonId') == year:
                     week = s.get('scoringPeriodId')
                     proj_stats = s.get('stats', {})
                     
-                    if not proj_stats or week == 0:
+                    if not proj_stats or week == 0 or week in seen_weeks:
                         continue
+                    seen_weeks.add(week)
                         
                     opp_info = schedule_matrix.get((pro_team_id, week), {'opponent': 0, 'loss_prob': 0.5})
                     opp_team_id = opp_info['opponent']
@@ -381,9 +381,21 @@ def fetch_actuals_gamecast(year, week, season_type):
         print(f"Error fetching actuals for week {week} seasonType {season_type}: {e}")
         return []
 
+def get_current_nfl_week():
+    try:
+        import urllib.request, json
+        url = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        res = urllib.request.urlopen(req)
+        d = json.loads(res.read())
+        return int(d.get('week', {}).get('number', 7))
+    except Exception:
+        return 7
+
 def main():
     parser = argparse.ArgumentParser(description="Worst QB Live Stats Scraper")
     parser.add_argument('--year', type=int, default=2026, help="NFL Season Year to scrape (e.g. 2026)")
+    parser.add_argument('--clean', action='store_true', help="Wipe stale stats and projections before ingesting")
     args = parser.parse_args()
     
     print(f"Starting Worst QB Stats Scraper for {args.year}...")
@@ -397,6 +409,17 @@ def main():
     supabase: Client = create_client(url, key)
     
     year = args.year
+
+    if args.clean:
+        print("Cleaning stale stats and projections for pristine season data...")
+        try:
+            # Delete stale player_stats and player_projections
+            supabase.table('player_stats').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+            supabase.table('player_projections').delete().neq('id', '00000000-0000-0000-0000-000000000000').execute()
+            print("Successfully purged stale stats & projections.")
+        except Exception as e:
+            print(f"Warning during purge: {e}")
+
     print("Fetching Gamecast Actuals...")
         
     # We will fetch preseason weeks (1 to 4) and regular season weeks (1 to 18)
@@ -424,13 +447,11 @@ def main():
                 'id': player_id,
                 'name': row.get('name', 'Unknown'),
                 'team': row.get('team', 'FA'),
-                'position': 'Unknown', # Default to Unknown for stats since we don't have position data in gamecast easily
+                'position': 'Unknown',
                 'headshot_url': row.get('headshot', ''),
                 'height': '', 'weight': 0, 'college': '', 'age': 0
             }
         
-        # We only want to save players who actually registered attempts (either passing or rushing) 
-        # to avoid cluttering the DB with 0-stat lines for every player in the boxscore
         if row['attempts'] == 0 and row['rushing_yards'] == 0 and row['fumbles_lost'] == 0:
             continue
             
@@ -546,26 +567,23 @@ def main():
         for i in range(0, len(players_list), chunk_size):
             chunk = players_list[i:i + chunk_size]
             try:
-                # We upsert without overriding bio data if they already exist, but Supabase python client doesn't natively support DO NOTHING easily without raw SQL.
-                # Since we want to ensure they exist, we just upsert. It might overwrite position, but scrape_espn_projections runs right after and fixes it!
                 supabase.table('players').upsert(chunk, on_conflict='id').execute()
-            except Exception as e:
+            except Exception:
                 pass
                 
     if records_to_upsert:
-        # Upsert in chunks to avoid payload limits
         chunk_size = 500
         for i in range(0, len(records_to_upsert), chunk_size):
             chunk = records_to_upsert[i:i + chunk_size]
             try:
-                # Need to use the new unique constraint for on_conflict
                 supabase.table('player_stats').upsert(chunk, on_conflict='player_id,week,season_type').execute()
             except Exception as e:
                 print(f"Error upserting stats chunk: {e}")
         print(f"Successfully upserted {len(records_to_upsert)} actual stat lines!")
             
     # Upsert Projections
-    current_week = 1 
+    current_week = get_current_nfl_week()
+    print(f"Current NFL Week determined as: Week {current_week}")
     projections_data = scrape_espn_projections(year, current_week)
     if projections_data:
         try:
@@ -575,7 +593,6 @@ def main():
             name_to_id = {}
             for p in db_players:
                 name_to_id[p['name'].lower()] = p['id']
-                # also map last names for easier matching (e.g. "P. Mahomes" -> "Mahomes")
                 parts = p['name'].split(' ')
             new_players = []
             proj_records = []
@@ -584,7 +601,6 @@ def main():
                 player_info = p_data['player']
                 pid = fuzzy_match_player(player_info['name'], db_players)
                 if not pid:
-                    # New player, insert them into DB
                     pid = player_info['id']
                     new_players.append({
                         'id': pid,
@@ -593,10 +609,8 @@ def main():
                         'position': player_info['position'],
                         'status': 'active'
                     })
-                    # Add to db_players locally so we don't duplicate
                     db_players.append({'id': pid, 'name': player_info['name']})
                 else:
-                    # Existing player, update their position/team
                     new_players.append({
                         'id': pid,
                         'name': player_info['name'],
@@ -605,7 +619,6 @@ def main():
                         'status': 'active'
                     })
                 
-                # If they have no projections, we at least want a baseline 0 for the current week so they show up
                 if not p_data['projections']:
                     proj_records.append({
                         'player_id': pid,
@@ -622,15 +635,17 @@ def main():
                         })
                 
             if new_players:
-                # Deduplicate before upserting
                 unique_players = { p['id']: p for p in new_players }.values()
                 print(f"Adding/Updating {len(unique_players)} players in database...")
                 supabase.table('players').upsert(list(unique_players), on_conflict='id').execute()
 
             if proj_records:
-                unique_projs = { (pr['player_id'], pr['week']): pr for pr in proj_records }.values()
-                print(f"Upserting {len(unique_projs)} projections...")
-                supabase.table('player_projections').upsert(list(unique_projs), on_conflict='player_id,week').execute()
+                unique_projs = list({ (pr['player_id'], pr['week']): pr for pr in proj_records }.values())
+                print(f"Upserting {len(unique_projs)} projections in batches...")
+                chunk_size = 500
+                for i in range(0, len(unique_projs), chunk_size):
+                    chunk = unique_projs[i:i + chunk_size]
+                    supabase.table('player_projections').upsert(chunk, on_conflict='player_id,week').execute()
                 print("Projections updated successfully!")
         except Exception as e:
             print(f"Error updating Supabase projections: {e}")
