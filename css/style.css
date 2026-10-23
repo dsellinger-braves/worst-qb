@@ -120,6 +120,17 @@ body {
     transform: translateY(-2px);
 }
 
+.btn-secondary {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border: 1px solid var(--glass-border);
+}
+
+.btn-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
 /* Main Content area */
 main {
     flex: 1;
