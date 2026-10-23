@@ -112,16 +112,16 @@ Each run does a **full re-scrape** of the season, not just the current week:
    - Pick sixes: from play-by-play drives, scoring plays containing both `INTERCEPTED` and `TOUCHDOWN`. Regex pulls `X.Lastname pass`, then fuzzy-matches the initial and last name to the boxscore display name.
    - Team loss: from `header.competitions[0].competitors[].winner`.
    - Rows with `attempts == 0 and rushing_yards == 0 and fumbles_lost == 0` are skipped.
-   - Players are upserted with `position: 'Unknown'` (projections fix this up later in the same run).
-2. **Team QB aggregation** builds `TEAM_<ABBR>_<season_type>` rows. It's currently a no-op because of a bug (KNOWN_ISSUES #4).
+   - Players with pass attempts are assigned `position: 'QB'` (non-passers default to `Unknown` until projection metadata updates them).
+2. **Team QB aggregation** builds `TEAM_<ABBR>_<season_type>` rows.
 3. **Upserts**: players, then `player_stats` in chunks of 500 with `on_conflict='player_id,week,season_type'`.
-4. **Projections**: `scrape_espn_projections(year, current_week=1)`.
+4. **Projections**: `scrape_espn_projections(year, current_week)`.
    - `fetch_schedules_and_odds(year)`: scoreboard weeks 1–18. Builds `(teamId, week) → {opponent, loss_prob}` from the closing moneyline, with implied probabilities normalized to remove the vig.
    - ESPN Fantasy API: `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}/segments/0/leaguedefaults/3?view=kona_player_info` with an `X-Fantasy-Filter` header asking for up to 3000 players sorted by % owned.
    - Projection stat entries: `statSourceId == 1 && statSplitTypeId == 1`, `scoringPeriodId` = week.
    - ESPN stat IDs used: `0` attempts, `1` completions, `3` pass yds, `4` pass TD, `20` INT, `24` rush yds, `25` rush TD, `72` fumbles lost, `99` D/ST sacks.
    - A QB's projected sacks = the opponent D/ST's projected sacks that week.
-   - Player matching uses `fuzzy_match_player` against existing `espn-%` IDs (exact normalized name, then last name + first initial). Unmatched players are inserted with `espn-<id>`.
+   - Player records use canonical ESPN athlete IDs (`espn-<id>`) directly, avoiding initial-based collisions across players sharing last names.
    - Upserts players (position/team refreshed) and `player_projections` (`on_conflict='player_id,week'`).
 
 ### ESPN ID maps (in `update_stats.py`)

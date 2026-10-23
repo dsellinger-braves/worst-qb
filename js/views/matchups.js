@@ -294,7 +294,8 @@ export const MatchupsView = {
             // Also find actual passers for context
             const subPassers = MatchupsView.state.allStats.filter(s => {
                 const pos = s.players?.position || '';
-                return s.players?.team === teamAbbr && pos.includes('QB') && s.player_id !== teamQBPid;
+                const isQB = pos.includes('QB') || (s.attempts && s.attempts > 0);
+                return s.players?.team === teamAbbr && isQB && s.player_id !== teamQBPid;
             });
 
             return [{
@@ -320,7 +321,8 @@ export const MatchupsView = {
             const p = s.players;
             if (!p) return;
             const pos = p.position || '';
-            if (p.team === teamAbbr && pos.includes('QB') && p.position !== 'TM_QB') {
+            const isQB = pos.includes('QB') || (s.attempts && s.attempts > 0);
+            if (p.team === teamAbbr && isQB && p.position !== 'TM_QB') {
                 seenPids.add(s.player_id);
                 qbs.push({
                     id: s.player_id,
@@ -340,7 +342,8 @@ export const MatchupsView = {
             const p = pr.players;
             if (!p) return;
             const pos = p.position || '';
-            if (p.team === teamAbbr && pos.includes('QB') && p.position !== 'TM_QB') {
+            const isQB = pos.includes('QB');
+            if (p.team === teamAbbr && isQB && p.position !== 'TM_QB') {
                 if (!seenPids.has(pr.player_id)) {
                     seenPids.add(pr.player_id);
                     qbs.push({

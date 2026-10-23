@@ -51,14 +51,6 @@ def fuzzy_match_player(name, db_players):
     for p in db_players:
         if p['name'].lower().replace('.', '').replace('-', ' ') == name_lower:
             return p['id']
-    
-    # Try last name + initial
-    for p in db_players:
-        db_parts = p['name'].lower().split()
-        csv_parts = name_lower.split()
-        if len(db_parts) > 1 and len(csv_parts) > 1:
-            if db_parts[-1] == csv_parts[-1] and db_parts[0][0] == csv_parts[0][0]:
-                return p['id']
     return None
 
 ESPN_TEAM_MAP = {
@@ -443,11 +435,12 @@ def main():
         
         # Collect player profiles to avoid foreign key constraints
         if player_id not in players_to_upsert:
+            pos = 'QB' if row.get('attempts', 0) > 0 else 'Unknown'
             players_to_upsert[player_id] = {
                 'id': player_id,
                 'name': row.get('name', 'Unknown'),
                 'team': row.get('team', 'FA'),
-                'position': 'Unknown',
+                'position': pos,
                 'headshot_url': row.get('headshot', ''),
                 'height': '', 'weight': 0, 'college': '', 'age': 0
             }
@@ -589,35 +582,19 @@ def main():
         try:
             db_players = supabase.table('players').select('id, name').like('id', 'espn-%').execute().data
             
-            # Simple fuzzy matching (last name or exact match)
-            name_to_id = {}
-            for p in db_players:
-                name_to_id[p['name'].lower()] = p['id']
-                parts = p['name'].split(' ')
             new_players = []
             proj_records = []
             
             for p_data in projections_data:
                 player_info = p_data['player']
-                pid = fuzzy_match_player(player_info['name'], db_players)
-                if not pid:
-                    pid = player_info['id']
-                    new_players.append({
-                        'id': pid,
-                        'name': player_info['name'],
-                        'team': player_info['team'],
-                        'position': player_info['position'],
-                        'status': 'active'
-                    })
-                    db_players.append({'id': pid, 'name': player_info['name']})
-                else:
-                    new_players.append({
-                        'id': pid,
-                        'name': player_info['name'],
-                        'team': player_info['team'],
-                        'position': player_info['position'],
-                        'status': 'active'
-                    })
+                pid = player_info['id']
+                new_players.append({
+                    'id': pid,
+                    'name': player_info['name'],
+                    'team': player_info['team'],
+                    'position': player_info['position'],
+                    'status': 'active'
+                })
                 
                 if not p_data['projections']:
                     proj_records.append({

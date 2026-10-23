@@ -169,7 +169,7 @@ def sync_2026():
     proj_records = []
     for p_data in projections_data:
         player_info = p_data['player']
-        pid = fuzzy_match_player(player_info['name'], db_players) or player_info['id']
+        pid = player_info['id']
         new_players.append({
             'id': pid,
             'name': player_info['name'],
