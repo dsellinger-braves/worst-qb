@@ -42,7 +42,7 @@ flowchart LR
 | `stats[?league=]` | `views/stats.js` | Season-to-date leaderboard (Individual QBs / Top Weekly / Team QBs), excluding preseason. Shows the scraper's `custom_points`; ignores league scoring. | `player_stats` + `players` |
 | `player_profile?id=[&league=]` | `views/player_profile.js` | Bio, game log (preseason rows tinted purple, regular-season totals) and the 2026 projections table. **Does** apply league scoring when `league` is passed. Also embedded in the draft-room modal. | `players`, `player_stats`, `player_projections`, `leagues` |
 | `settings` | `views/settings.js` | Email opt-in toggle (`auth.updateUser({ data: { email_opt_in } })`). Nav link only shows when logged in. | Supabase Auth |
-| `matchups` | inline in `app.js` | Placeholder ("Live stats feed will appear here") | – |
+| `matchups[?league=&week=]` | `views/matchups.js` | Live NFL Gamecast & QB Tracker: Real-time scores, team logos, quarterback duels, actual/projected Worst QB scoring, and fantasy team ownership badges for the selected league/week. Auto-refreshes every 45s. | ESPN API + `player_stats`, `player_projections`, `draft_picks`, `league_members` |
 
 ### Admin detection is inconsistent
 - `league_detail.js` treats a user as admin if `league_members.is_admin = true`.

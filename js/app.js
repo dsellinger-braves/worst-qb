@@ -10,6 +10,7 @@ import { Router } from './router.js';
 import { supabase } from './supabase.js';
 
 import { SettingsView } from './views/settings.js';
+import { MatchupsView } from './views/matchups.js';
 
 // Define Routes
 const routes = {
@@ -22,10 +23,7 @@ const routes = {
     'draft': DraftView,
     'rules': RulesView,
     'settings': SettingsView,
-    'matchups': {
-        render: () => `<div class="view-container active glass-panel"><h1>Live Scores</h1><p>Live stats feed will appear here during games.</p></div>`,
-        init: () => {}
-    }
+    'matchups': MatchupsView
 };
 
 // Initialize Router
