@@ -282,6 +282,19 @@ export const MatchupsView = {
         }
     },
 
+    getProjectedAttempts: (pr) => {
+        if (!pr || !pr.opponent) return 0;
+        try {
+            if (typeof pr.opponent === 'string' && pr.opponent.startsWith('{')) {
+                const parsed = JSON.parse(pr.opponent);
+                return parseFloat(parsed?.raw?.attempts) || 0;
+            }
+        } catch (e) {
+            return 0;
+        }
+        return 0;
+    },
+
     findQuarterbacksForTeam: (teamAbbr) => {
         const isTeamQBMode = MatchupsView.state.leagueScoringType === 'team_qb';
         const teamQBPid = `TEAM_${teamAbbr}_regular`;
@@ -295,7 +308,10 @@ export const MatchupsView = {
             const subPassers = MatchupsView.state.allStats.filter(s => {
                 const pos = s.players?.position || '';
                 const isQB = pos.includes('QB') || (s.attempts && s.attempts > 0);
-                return s.players?.team === teamAbbr && isQB && s.player_id !== teamQBPid;
+                const proj = MatchupsView.state.projectionsMap[s.player_id] || null;
+                const projAtt = MatchupsView.getProjectedAttempts(proj);
+                const hasPasses = (s.attempts && s.attempts > 0) || projAtt > 0;
+                return s.players?.team === teamAbbr && isQB && s.player_id !== teamQBPid && hasPasses;
             });
 
             return [{
@@ -316,28 +332,35 @@ export const MatchupsView = {
         const qbs = [];
         const seenPids = new Set();
 
-        // 1. Any QB from player_stats for this team
+        // 1. Any QB from player_stats for this team who threw passes or is projected to throw passes
         MatchupsView.state.allStats.forEach(s => {
             const p = s.players;
             if (!p) return;
             const pos = p.position || '';
             const isQB = pos.includes('QB') || (s.attempts && s.attempts > 0);
             if (p.team === teamAbbr && isQB && p.position !== 'TM_QB') {
-                seenPids.add(s.player_id);
-                qbs.push({
-                    id: s.player_id,
-                    name: p.name,
-                    team: p.team,
-                    position: 'QB',
-                    headshot: p.headshot_url,
-                    stat: s,
-                    projection: MatchupsView.state.projectionsMap[s.player_id] || null,
-                    ownership: MatchupsView.state.picksMap[s.player_id] || null
-                });
+                const proj = MatchupsView.state.projectionsMap[s.player_id] || null;
+                const projAtt = MatchupsView.getProjectedAttempts(proj);
+                const actualAtt = s.attempts || 0;
+
+                // Only include if they threw passes in the game OR are projected to throw passes
+                if (actualAtt > 0 || projAtt > 0) {
+                    seenPids.add(s.player_id);
+                    qbs.push({
+                        id: s.player_id,
+                        name: p.name,
+                        team: p.team,
+                        position: 'QB',
+                        headshot: p.headshot_url,
+                        stat: s,
+                        projection: proj,
+                        ownership: MatchupsView.state.picksMap[s.player_id] || null
+                    });
+                }
             }
         });
 
-        // 2. Projected QBs for this team if not already included
+        // 2. Projected QBs for this team who are projected to throw passes (> 0 attempts)
         MatchupsView.state.allProjections.forEach(pr => {
             const p = pr.players;
             if (!p) return;
@@ -345,17 +368,21 @@ export const MatchupsView = {
             const isQB = pos.includes('QB');
             if (p.team === teamAbbr && isQB && p.position !== 'TM_QB') {
                 if (!seenPids.has(pr.player_id)) {
-                    seenPids.add(pr.player_id);
-                    qbs.push({
-                        id: pr.player_id,
-                        name: p.name,
-                        team: p.team,
-                        position: 'QB',
-                        headshot: p.headshot_url,
-                        stat: null,
-                        projection: pr,
-                        ownership: MatchupsView.state.picksMap[pr.player_id] || null
-                    });
+                    const projAtt = MatchupsView.getProjectedAttempts(pr);
+                    // Filter out any player who is not projected to throw passes
+                    if (projAtt > 0) {
+                        seenPids.add(pr.player_id);
+                        qbs.push({
+                            id: pr.player_id,
+                            name: p.name,
+                            team: p.team,
+                            position: 'QB',
+                            headshot: p.headshot_url,
+                            stat: null,
+                            projection: pr,
+                            ownership: MatchupsView.state.picksMap[pr.player_id] || null
+                        });
+                    }
                 }
             }
         });
