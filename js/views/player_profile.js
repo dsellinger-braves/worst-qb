@@ -24,22 +24,26 @@ export const PlayerProfileView = {
 
                 <div id="view-gamelog" style="display: none;">
                     <div style="overflow-x: auto;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                        <table style="width: 100%; border-collapse: collapse; text-align: left; min-width: 850px;">
                             <thead>
-                                <tr style="border-bottom: 2px solid var(--glass-border);">
-                                    <th style="padding: 1rem 0.5rem;">Week</th>
-                                    <th style="padding: 1rem 0.5rem;">Comp/Att</th>
-                                    <th style="padding: 1rem 0.5rem;">Pass Yds</th>
-                                    <th style="padding: 1rem 0.5rem;">Pass TD</th>
-                                    <th style="padding: 1rem 0.5rem;">INT</th>
-                                    <th style="padding: 1rem 0.5rem;">Sacks</th>
-                                    <th style="padding: 1rem 0.5rem;">Fumbles</th>
-                                    <th style="padding: 1rem 0.5rem;">Result</th>
-                                    <th style="padding: 1rem 0.5rem; color: var(--accent-primary);">Fantasy Pts</th>
+                                <tr style="border-bottom: 2px solid var(--glass-border); font-size: 0.9rem;">
+                                    <th style="padding: 0.75rem 0.5rem;">Week</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Comp/Att</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Comp %</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Pass Yds</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Pass TD</th>
+                                    <th style="padding: 0.75rem 0.5rem;">INT</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Pick 6</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Rush Yds</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Rush TD</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Sacks</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Fumbles</th>
+                                    <th style="padding: 0.75rem 0.5rem;">Result</th>
+                                    <th style="padding: 0.75rem 0.5rem; color: var(--accent-primary);">Fantasy Pts</th>
                                 </tr>
                             </thead>
                             <tbody id="pp-gamelog">
-                                <tr><td colspan="9" style="text-align: center; padding: 2rem;">Loading game log...</td></tr>
+                                <tr><td colspan="13" style="text-align: center; padding: 2rem;">Loading game log...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -138,11 +142,13 @@ export const PlayerProfileView = {
         const tbody = document.getElementById('pp-gamelog');
         
         if (sErr || !stats || stats.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 2rem;">No games played yet.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13" style="text-align: center; padding: 2rem;">No games played yet.</td></tr>`;
             return;
         }
 
-        let totalCmp = 0, totalAtt = 0, totalYds = 0, totalTds = 0, totalInt = 0, totalSack = 0, totalFum = 0, totalPts = 0;
+        let totalCmp = 0, totalAtt = 0, totalYds = 0, totalTds = 0, totalInt = 0, totalPick6 = 0;
+        let totalRushYds = 0, totalRushTds = 0, totalSack = 0, totalFum = 0, totalPts = 0;
+        let totalWins = 0, totalLosses = 0;
 
         tbody.innerHTML = stats.map(s => {
             const isPre = s.season_type === 'preseason';
@@ -154,44 +160,61 @@ export const PlayerProfileView = {
                 totalYds += s.passing_yards || 0;
                 totalTds += s.passing_tds || 0;
                 totalInt += s.interceptions || 0;
+                totalPick6 += s.pick_sixes || 0;
+                totalRushYds += s.rushing_yards || 0;
+                totalRushTds += s.rushing_tds || 0;
                 totalSack += s.sacks || 0;
                 totalFum += s.fumbles_lost || 0;
+                if (s.team_loss) totalLosses++; else totalWins++;
                 totalPts += pts;
             }
             
             const rowBg = isPre ? 'rgba(128, 0, 128, 0.15)' : 'transparent';
             const hoverBg = isPre ? 'rgba(128, 0, 128, 0.25)' : 'rgba(255,255,255,0.05)';
             const borderBottom = isPre ? 'none' : '1px solid rgba(255,255,255,0.05)';
+            const compPct = (s.attempts || 0) > 0 
+                ? (((s.completions || 0) / s.attempts) * 100).toFixed(1) + '%' 
+                : (s.completion_percentage ? Number(s.completion_percentage).toFixed(1) + '%' : '0.0%');
             
             return `
-            <tr style="background: ${rowBg}; border-bottom: ${borderBottom}; transition: background 0.2s;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${rowBg}'">
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">
+            <tr style="background: ${rowBg}; border-bottom: ${borderBottom}; transition: background 0.2s; font-size: 0.9rem;" onmouseover="this.style.background='${hoverBg}'" onmouseout="this.style.background='${rowBg}'">
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">
                     ${s.week} 
                     ${isPre ? '<span style="font-size: 0.7rem; background: var(--accent-secondary); color: white; padding: 0.1rem 0.3rem; border-radius: 4px; margin-left: 0.5rem;">PRE</span>' : ''}
                 </td>
-                <td style="padding: 1rem 0.5rem;">${s.completions || 0} / ${s.attempts || 0}</td>
-                <td style="padding: 1rem 0.5rem;">${s.passing_yards || 0}</td>
-                <td style="padding: 1rem 0.5rem;">${s.passing_tds || 0}</td>
-                <td style="padding: 1rem 0.5rem;">${s.interceptions || 0}</td>
-                <td style="padding: 1rem 0.5rem;">${s.sacks || 0}</td>
-                <td style="padding: 1rem 0.5rem;">${s.fumbles_lost || 0}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${s.team_loss ? '<span style="color: var(--accent-primary)">L</span>' : '<span style="color: var(--accent-success)">W</span>'}</td>
-                <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${pts.toFixed(2)}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.completions || 0} / ${s.attempts || 0}</td>
+                <td style="padding: 0.75rem 0.5rem;">${compPct}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.passing_yards || 0}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.passing_tds || 0}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.interceptions || 0}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.pick_sixes || 0}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.rushing_yards || 0}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.rushing_tds || 0}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.sacks || 0}</td>
+                <td style="padding: 0.75rem 0.5rem;">${s.fumbles_lost || 0}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${s.team_loss ? '<span style="color: var(--accent-primary)">L</span>' : '<span style="color: var(--accent-success)">W</span>'}</td>
+                <td style="padding: 0.75rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${pts.toFixed(2)}</td>
             </tr>
             `;
         }).join('');
         
+        const totalCompPct = totalAtt > 0 ? ((totalCmp / totalAtt) * 100).toFixed(1) + '%' : '0.0%';
+
         tbody.innerHTML += `
-            <tr style="background: rgba(255,255,255,0.05); border-top: 2px solid var(--glass-border);">
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">2026 Regular Season Total</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalCmp} / ${totalAtt}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalYds}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalTds}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalInt}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalSack}</td>
-                <td style="padding: 1rem 0.5rem; font-weight: bold;">${totalFum}</td>
-                <td style="padding: 1rem 0.5rem;">-</td>
-                <td style="padding: 1rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${totalPts.toFixed(2)}</td>
+            <tr style="background: rgba(255,255,255,0.05); border-top: 2px solid var(--glass-border); font-size: 0.9rem;">
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">2026 Regular Season Total</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalCmp} / ${totalAtt}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalCompPct}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalYds}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalTds}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalInt}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalPick6}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalRushYds}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalRushTds}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalSack}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalFum}</td>
+                <td style="padding: 0.75rem 0.5rem; font-weight: bold;">${totalLosses}L - ${totalWins}W</td>
+                <td style="padding: 0.75rem 0.5rem; color: var(--accent-primary); font-weight: bold;">${totalPts.toFixed(2)}</td>
             </tr>
         `;
 

@@ -127,6 +127,8 @@ export const DraftView = {
         `;
         document.head.appendChild(style);
         
+        window.DraftView = DraftView;
+        
         // Setup state
         DraftView.state = {
             userId: null,
@@ -442,10 +444,14 @@ export const DraftView = {
         } else {
             banner.style.display = 'flex';
             let adminBtn = '';
-            if (isAdmin && draftState.currentTurnUserId !== userId) {
-                adminBtn = `<button class="btn btn-primary" style="font-size: 0.8rem; padding: 0.2rem 0.5rem;" onclick="autoPick('${draftState.currentTurnUserId}')">Admin Auto-Pick</button>`;
+            const isCommishDrafting = isAdmin && draftState.currentTurnUserId !== userId;
+            if (isCommishDrafting) {
+                adminBtn = `<button class="btn btn-primary" style="font-size: 0.8rem; padding: 0.2rem 0.6rem; margin-left: 0.5rem;" onclick="autoPick('${draftState.currentTurnUserId}')">Admin Auto-Pick</button>`;
             }
-            document.getElementById('draft-clock-team').innerHTML = `${draftState.currentTurnTeamName} ${adminBtn}`;
+            const commishBadge = isCommishDrafting 
+                ? `<span style="font-size: 0.8rem; color: #60a5fa; font-weight: normal; margin-left: 0.5rem; background: rgba(37,99,235,0.15); padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid rgba(59,130,246,0.3);">Commish Drafting</span>` 
+                : '';
+            document.getElementById('draft-clock-team').innerHTML = `${draftState.currentTurnTeamName} ${commishBadge} ${adminBtn}`;
         }
 
         listEl.innerHTML = members.map((m, idx) => {
@@ -459,20 +465,24 @@ export const DraftView = {
             }
 
             const isOnClock = draftState.currentTurnUserId === m.user_id;
-            const bgStyle = isOnClock ? 'background: rgba(220, 38, 38, 0.2); border: 1px solid var(--danger-color);' : 'background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);';
-            const nameColor = isOnClock ? 'color: white; font-weight: bold;' : '';
+            const bgStyle = isOnClock ? 'background: rgba(37, 99, 235, 0.2); border: 1px solid #3b82f6;' : 'background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);';
+            const nameColor = isOnClock ? 'color: #93c5fd; font-weight: bold;' : '';
+            const pickNames = theirPicks.map(p => p.players?.name || 'Player').join(', ');
 
             return `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem; border-radius: 4px; ${bgStyle}">
-                <div>
-                    <span style="font-weight: bold; color: var(--text-secondary); margin-right: 0.5rem;">${idx + 1}.</span>
-                    <span style="font-size: 0.9rem; ${nameColor}">${m.team_name}</span>
+            <div style="display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem; border-radius: 4px; ${bgStyle}">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-weight: bold; color: var(--text-secondary); margin-right: 0.5rem;">${idx + 1}.</span>
+                        <span style="font-size: 0.9rem; ${nameColor}">${m.team_name}</span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">${m.season_points.toFixed(2)} pts</span>
+                        <span title="${theirPicks.length} / 2 picks made">${statusIcon}</span>
+                        ${undoBtn}
+                    </div>
                 </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">${m.season_points.toFixed(2)} pts</span>
-                    <span title="${theirPicks.length} / 2 picks made">${statusIcon}</span>
-                    ${undoBtn}
-                </div>
+                ${pickNames ? `<div style="font-size: 0.75rem; color: var(--text-secondary); padding-left: 1.25rem;">🏈 ${pickNames}</div>` : ''}
             </div>
         `}).join('');
     },
@@ -517,9 +527,25 @@ export const DraftView = {
         // Apply Sort
         available.sort((a, b) => {
             if (DraftView.state.sortCol === 'pts') {
-                const pA = projections[a.id] || 0;
-                const pB = projections[b.id] || 0;
-                return DraftView.state.sortAsc ? pA - pB : pB - pA;
+                const valA = projections[a.id];
+                const valB = projections[b.id];
+                const hasA = valA !== undefined && valA !== null && !isNaN(valA);
+                const hasB = valB !== undefined && valB !== null && !isNaN(valB);
+
+                // Both N/A -> tie-break alphabetically by last name
+                if (!hasA && !hasB) {
+                    const getLastName = (name) => {
+                        const parts = name.trim().split(' ');
+                        return parts[parts.length - 1].toLowerCase();
+                    };
+                    return getLastName(a.name).localeCompare(getLastName(b.name));
+                }
+                // N/A always goes to the bottom regardless of ascending/descending
+                if (!hasA) return 1;
+                if (!hasB) return -1;
+
+                // Both have projections -> sort numerically
+                return DraftView.state.sortAsc ? valA - valB : valB - valA;
             } else {
                 // Sort by last name
                 const getLastName = (name) => {
@@ -557,7 +583,7 @@ export const DraftView = {
                 draftButtonHtml = `<button class="btn" disabled style="background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;">Full</button>`;
             } else if (!isMyTurn) {
                 if (isAdmin && !draftState.isComplete) {
-                    draftButtonHtml = `<button class="btn" style="background: var(--danger-color); color: white;" onclick="draftPlayer('${p.id}', '${draftState.currentTurnUserId}')">Force Draft</button>`;
+                    draftButtonHtml = `<button class="btn" style="background: #2563eb; color: white; font-weight: 600; font-size: 0.85rem; padding: 0.4rem 0.8rem; box-shadow: 0 2px 8px rgba(37,99,235,0.3);" onclick="draftPlayer('${p.id}', '${draftState.currentTurnUserId}')">+ Draft for ${draftState.currentTurnTeamName}</button>`;
                 } else {
                     draftButtonHtml = `<button class="btn" disabled style="background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;" title="Waiting on ${waitingOn || 'someone else'}">Wait</button>`;
                 }
@@ -616,11 +642,13 @@ export const DraftView = {
         const { error } = await supabase.from('draft_picks').insert(pickData);
         
         if (error) {
-            console.error(error);
+            console.error("Draft error:", error);
             if (error.code === '23505') {
                 alert("This player was just drafted by someone else! Try again.");
+            } else if (error.message && (error.message.includes('draft_picks_user_id_fkey') || error.code === '23503')) {
+                alert("Database constraint error: Please run schema_offline_members.sql in your Supabase SQL editor to allow drafting for non-account members.");
             } else {
-                alert("Error making draft pick.");
+                alert(`Error making draft pick: ${error.message || 'Unknown error'}`);
             }
         } else {
             // Success! Refetch picks and re-render pool (or rely on realtime if it's fast enough, but manual refetch is safer)
@@ -725,5 +753,16 @@ export const DraftView = {
             viewContainer.style.padding = '0';
             viewContainer.style.maxWidth = '100%';
         }
+    },
+
+    setSort: (col) => {
+        if (DraftView.state.sortCol === col) {
+            DraftView.state.sortAsc = !DraftView.state.sortAsc;
+        } else {
+            DraftView.state.sortCol = col;
+            // Default pts to descending (highest first for worst QB), name to ascending (A-Z)
+            DraftView.state.sortAsc = col === 'name';
+        }
+        DraftView.renderPlayerPool();
     }
 };

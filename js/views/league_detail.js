@@ -25,7 +25,22 @@ export const LeagueDetailView = {
             
             <!-- Tab Content: Standings -->
             <div id="tab-standings" class="tab-content" style="display: block;">
-                <h2>Teams & Standings</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <h2 style="margin: 0;">Teams & Standings</h2>
+                    <button id="ld-add-member-btn" class="btn" style="display: none; font-size: 0.85rem; padding: 0.4rem 0.8rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa;">+ Add Team (No Account)</button>
+                </div>
+
+                <div id="ld-add-member-panel" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
+                    <h4 style="margin-top: 0; margin-bottom: 0.5rem; color: var(--accent-secondary); font-size: 1rem;">Add Offline / Non-Account Member</h4>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">Add a friend or placeholder team who doesn't have an account. As commissioner, you can draft players on their behalf during the draft.</p>
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                        <input type="text" id="ld-new-team-name" class="form-input" placeholder="Team Name (e.g. Dave's Duds)" style="flex: 1; min-width: 220px;">
+                        <button id="ld-save-new-team-btn" class="btn btn-primary">Add Team</button>
+                        <button id="ld-cancel-new-team-btn" class="btn btn-secondary">Cancel</button>
+                    </div>
+                    <p id="ld-add-team-msg" style="margin-top: 0.5rem; font-size: 0.85rem; display: none;"></p>
+                </div>
+
                 <div id="ld-teams" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
                     Loading teams...
                 </div>
@@ -58,78 +73,81 @@ export const LeagueDetailView = {
                 </div>
                 <div id="ld-team-content" style="overflow-x: auto;"></div>
             </div>
+        </div>
             
-            <!-- Settings Modal -->
-            <div id="ld-settings-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 1rem;">
-                <div class="glass-panel" style="max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                        <h2>League Scoring Settings</h2>
-                        <button id="ld-settings-close" class="btn" style="padding: 0.2rem 0.5rem;">✕</button>
+        <!-- Settings Modal (outside view-container so fixed positioning is viewport-relative) -->
+        <div id="ld-settings-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: flex-start; overflow-y: auto; padding: 2rem 1rem;">
+                <div class="glass-panel" style="max-width: 600px; width: 100%; max-height: calc(100vh - 4rem); display: flex; flex-direction: column; padding: 0; margin: auto 0; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--glass-border); flex-shrink: 0;">
+                        <h2 style="margin: 0; font-size: 1.35rem;">League Scoring Settings</h2>
+                        <button id="ld-settings-close" type="button" class="btn" style="padding: 0.3rem 0.6rem; font-size: 1.1rem; line-height: 1;">✕</button>
                     </div>
-                    <form id="ld-settings-form">
-                        <div style="margin-bottom: 2rem;">
-                            <h3 style="margin-top: 1rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Passing</h3>
-                            <div class="setting-row">
-                                <label>Pass Yds</label>
-                                <input type="number" step="0.01" id="s-pass-yds" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
-                            <div class="setting-row">
-                                <label>Pass TDs</label>
-                                <input type="number" step="0.1" id="s-pass-tds" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
-                            <div class="setting-row">
-                                <label>Interceptions</label>
-                                <input type="number" step="0.1" id="s-ints" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
-                            <div class="setting-row">
-                                <label>Pick Sixes</label>
-                                <input type="number" step="0.1" id="s-pick-sixes" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
-                            <div class="setting-row">
-                                <label>Completion % Penalty Multiplier</label>
-                                <input type="number" step="0.1" id="s-comp-mult" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
+                    <div style="overflow-y: auto; padding: 1.5rem; flex: 1;">
+                        <form id="ld-settings-form">
+                            <div>
+                                <h3 style="margin-top: 0.5rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Passing</h3>
+                                <div class="setting-row">
+                                    <label>Pass Yds</label>
+                                    <input type="number" step="0.01" id="s-pass-yds" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
+                                <div class="setting-row">
+                                    <label>Pass TDs</label>
+                                    <input type="number" step="0.1" id="s-pass-tds" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
+                                <div class="setting-row">
+                                    <label>Interceptions</label>
+                                    <input type="number" step="0.1" id="s-ints" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
+                                <div class="setting-row">
+                                    <label>Pick Sixes</label>
+                                    <input type="number" step="0.1" id="s-pick-sixes" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
+                                <div class="setting-row">
+                                    <label>Completion % Penalty Multiplier</label>
+                                    <input type="number" step="0.1" id="s-comp-mult" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
 
-                            <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Rushing & Sacks</h3>
-                            <div class="setting-row">
-                                <label>Rush Yds</label>
-                                <input type="number" step="0.01" id="s-rush-yds" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
-                            <div class="setting-row">
-                                <label>Rush TDs</label>
-                                <input type="number" step="0.1" id="s-rush-tds" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
-                            <div class="setting-row">
-                                <label>Fumbles Lost</label>
-                                <input type="number" step="0.1" id="s-fumbles" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
-                            <div class="setting-row">
-                                <label>Sacks Taken</label>
-                                <input type="number" step="0.1" id="s-sacks" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
+                                <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Rushing & Sacks</h3>
+                                <div class="setting-row">
+                                    <label>Rush Yds</label>
+                                    <input type="number" step="0.01" id="s-rush-yds" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
+                                <div class="setting-row">
+                                    <label>Rush TDs</label>
+                                    <input type="number" step="0.1" id="s-rush-tds" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
+                                <div class="setting-row">
+                                    <label>Fumbles Lost</label>
+                                    <input type="number" step="0.1" id="s-fumbles" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
+                                <div class="setting-row">
+                                    <label>Sacks Taken</label>
+                                    <input type="number" step="0.1" id="s-sacks" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
 
-                            <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Custom Rules</h3>
-                            <div class="setting-row">
-                                <label>Team Loss Bonus</label>
-                                <input type="number" step="0.1" id="s-team-loss" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
-                            <div class="setting-row">
-                                <label>Golden Penalty (No Pass Attempts)</label>
-                                <input type="number" step="0.1" id="s-no-att" class="form-input" style="width: 100px; text-align: right;">
-                            </div>
+                                <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Custom Rules</h3>
+                                <div class="setting-row">
+                                    <label>Team Loss Bonus</label>
+                                    <input type="number" step="0.1" id="s-team-loss" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
+                                <div class="setting-row">
+                                    <label>Golden Penalty (No Pass Attempts)</label>
+                                    <input type="number" step="0.1" id="s-no-att" class="form-input" style="width: 100px; text-align: right;">
+                                </div>
 
-                            <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Draft Order Override (Week <span id="s-draft-order-week"></span>)</h3>
-                            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Drag and drop to manually set the draft order for the current active week. Leave default to use standings.</p>
-                            <ul id="s-draft-order-list" style="list-style: none; padding: 0; margin-bottom: 2rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                                <!-- Draggable items injected here -->
-                            </ul>
-                        </div>
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">Save Settings & Order</button>
-                    </form>
+                                <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Draft Order Override (Week <span id="s-draft-order-week"></span>)</h3>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Drag and drop to manually set the draft order for the current active week. Leave default to use standings.</p>
+                                <ul id="s-draft-order-list" style="list-style: none; padding: 0; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                    <!-- Draggable items injected here -->
+                                </ul>
+                            </div>
+                        </form>
+                    </div>
+                    <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--glass-border); background: var(--bg-secondary); flex-shrink: 0;">
+                        <button type="submit" form="ld-settings-form" class="btn btn-primary" style="width: 100%; justify-content: center; font-weight: 600;">Save Settings & Order</button>
+                    </div>
                 </div>
             </div>
-            
-        </div>
     `,
     init: async (params) => {
         const targetId = params?.league || params?.id;
@@ -222,6 +240,83 @@ export const LeagueDetailView = {
                         advanceBtn.innerText = `Advance to Week ${nextWeek}`;
                     } else {
                         alert(`Successfully advanced to Week ${nextWeek}! Season points saved.`);
+                        LeagueDetailView.init({ league: leagueId });
+                    }
+                };
+            }
+
+            // Setup Add Member (No Account Needed) for Commissioner
+            const addMemberBtn = document.getElementById('ld-add-member-btn');
+            const addMemberPanel = document.getElementById('ld-add-member-panel');
+            const newTeamInput = document.getElementById('ld-new-team-name');
+            const saveTeamBtn = document.getElementById('ld-save-new-team-btn');
+            const cancelTeamBtn = document.getElementById('ld-cancel-new-team-btn');
+            const teamMsg = document.getElementById('ld-add-team-msg');
+
+            if (addMemberBtn) {
+                addMemberBtn.style.display = 'inline-block';
+                addMemberBtn.onclick = () => {
+                    const isOpen = addMemberPanel.style.display === 'block';
+                    addMemberPanel.style.display = isOpen ? 'none' : 'block';
+                    if (!isOpen) {
+                        newTeamInput.focus();
+                        teamMsg.style.display = 'none';
+                    }
+                };
+                cancelTeamBtn.onclick = () => {
+                    addMemberPanel.style.display = 'none';
+                    newTeamInput.value = '';
+                    teamMsg.style.display = 'none';
+                };
+                saveTeamBtn.onclick = async () => {
+                    const teamName = newTeamInput.value.trim();
+                    if (!teamName) {
+                        teamMsg.style.display = 'block';
+                        teamMsg.style.color = 'var(--danger-color)';
+                        teamMsg.innerText = 'Please enter a team name.';
+                        return;
+                    }
+                    saveTeamBtn.disabled = true;
+                    saveTeamBtn.innerText = 'Adding...';
+
+                    // Generate standard RFC4122 v4 UUID
+                    const generateUUID = () => {
+                        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+                            return crypto.randomUUID();
+                        }
+                        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                            return v.toString(16);
+                        });
+                    };
+
+                    const offlineUserId = generateUUID();
+                    const { error: insErr } = await supabase.from('league_members').insert({
+                        league_id: leagueId,
+                        user_id: offlineUserId,
+                        team_name: teamName,
+                        season_points: 0,
+                        draft_position: LeagueDetailView.teams.length + 1,
+                        is_admin: false
+                    });
+
+                    if (insErr) {
+                        console.error("Add team error:", insErr);
+                        saveTeamBtn.disabled = false;
+                        saveTeamBtn.innerText = 'Add Team';
+                        teamMsg.style.display = 'block';
+                        teamMsg.style.color = 'var(--danger-color)';
+                        if (insErr.message && (insErr.message.includes('league_members_user_id_fkey') || insErr.code === '23503')) {
+                            teamMsg.innerText = 'Database setup required: Please run schema_offline_members.sql in your Supabase SQL Editor to allow non-account members.';
+                        } else {
+                            teamMsg.innerText = 'Error adding team: ' + insErr.message;
+                        }
+                    } else {
+                        addMemberPanel.style.display = 'none';
+                        newTeamInput.value = '';
+                        saveTeamBtn.disabled = false;
+                        saveTeamBtn.innerText = 'Add Team';
+                        alert(`Team "${teamName}" added to the league!`);
                         LeagueDetailView.init({ league: leagueId });
                     }
                 };
@@ -391,6 +486,9 @@ export const LeagueDetailView = {
         };
         
         document.getElementById('ld-settings-close').onclick = () => modal.style.display = 'none';
+        modal.onclick = (e) => {
+            if (e.target === modal) modal.style.display = 'none';
+        };
         
         document.getElementById('ld-settings-form').onsubmit = async (e) => {
             e.preventDefault();
