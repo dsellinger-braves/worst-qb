@@ -529,6 +529,26 @@ h1 {
     color: var(--accent-secondary);
 }
 
+.worst-qb-tag.live {
+    color: #ef4444;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.worst-qb-tag.final {
+    color: #f87171;
+}
+
+.live-dot-small {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ef4444;
+    animation: pulse 1.5s infinite;
+}
+
 .qb-stats-summary {
     font-size: 0.75rem;
     color: var(--text-secondary);

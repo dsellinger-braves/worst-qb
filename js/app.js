@@ -1,16 +1,16 @@
-import { DashboardView } from './views/dashboard.js?v=1.3';
-import { LeaguesView } from './views/leagues.js?v=1.3';
-import { LeagueDetailView } from './views/league_detail.js?v=1.3';
-import { ProjectionsView } from './views/projections.js?v=1.3';
-import { StatsView } from './views/stats.js?v=1.3';
-import { PlayerProfileView } from './views/player_profile.js?v=1.3';
-import { DraftView } from './views/draft.js?v=1.3';
-import { RulesView } from './views/rules.js?v=1.3';
+import { DashboardView } from './views/dashboard.js?v=1.5';
+import { LeaguesView } from './views/leagues.js?v=1.5';
+import { LeagueDetailView } from './views/league_detail.js?v=1.5';
+import { ProjectionsView } from './views/projections.js?v=1.5';
+import { StatsView } from './views/stats.js?v=1.5';
+import { PlayerProfileView } from './views/player_profile.js?v=1.5';
+import { DraftView } from './views/draft.js?v=1.5';
+import { RulesView } from './views/rules.js?v=1.5';
 import { Router } from './router.js';
 import { supabase } from './supabase.js';
 
-import { SettingsView } from './views/settings.js?v=1.3';
-import { MatchupsView } from './views/matchups.js?v=1.3';
+import { SettingsView } from './views/settings.js?v=1.5';
+import { MatchupsView } from './views/matchups.js?v=1.5';
 
 // Define Routes
 const routes = {

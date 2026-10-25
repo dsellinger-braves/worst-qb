@@ -15,7 +15,9 @@ export const MatchupsView = {
         projectionsMap: {},
         picksMap: {},
         leagueSettings: null,
-        leagueScoringType: 'individual'
+        leagueScoringType: 'individual',
+        gameStates: {},
+        gameLossProbs: {}
     },
 
     render: () => `
@@ -103,10 +105,15 @@ export const MatchupsView = {
         // Load gamecast data
         await MatchupsView.loadData();
 
-        // Auto-refresh every 45s
+        // Auto-refresh every 30s when live hub is active
         MatchupsView.state.autoRefreshInterval = setInterval(() => {
+            if (!document.getElementById('gamecast-container')) {
+                clearInterval(MatchupsView.state.autoRefreshInterval);
+                MatchupsView.state.autoRefreshInterval = null;
+                return;
+            }
             MatchupsView.loadData(true); // silent refresh
-        }, 45000);
+        }, 30000);
     },
 
     populateLeagues: async () => {
@@ -159,6 +166,225 @@ export const MatchupsView = {
         MatchupsView.renderGames();
     },
 
+    parseEspnSummary: (gcData) => {
+        if (!gcData) return null;
+        const comps = gcData.header?.competitions?.[0] || {};
+        const status = comps.status || {};
+        const state = status.type?.state || 'pre';
+        const detail = status.type?.detail || '';
+        const isLive = state === 'in';
+        const isFinal = state === 'post';
+
+        const competitors = comps.competitors || [];
+        const homeC = competitors.find(c => c.homeAway === 'home') || {};
+        const awayC = competitors.find(c => c.homeAway === 'away') || {};
+
+        const homeAbbr = homeC.team?.abbreviation;
+        const awayAbbr = awayC.team?.abbreviation;
+
+        let homeLossProb = 0.5;
+        let awayLossProb = 0.5;
+        let homeIsLoss = false;
+        let awayIsLoss = false;
+
+        if (isFinal) {
+            const hScore = parseInt(homeC.score || 0);
+            const aScore = parseInt(awayC.score || 0);
+            homeIsLoss = hScore < aScore;
+            awayIsLoss = aScore < hScore;
+            homeLossProb = homeIsLoss ? 1.0 : (awayIsLoss ? 0.0 : 0.5);
+            awayLossProb = awayIsLoss ? 1.0 : (homeIsLoss ? 0.0 : 0.5);
+        } else if (isLive) {
+            const wp = gcData.winprobability || [];
+            if (wp.length > 0) {
+                const lastWp = wp[wp.length - 1];
+                const hWin = Number.isFinite(lastWp.homeWinPercentage) ? lastWp.homeWinPercentage : 0.5;
+                homeLossProb = 1.0 - hWin;
+                awayLossProb = hWin;
+            }
+        }
+
+        // Parse pick-sixes from drives & plays
+        const pickSixCounts = {};
+        const drives = gcData.drives || {};
+        const allDrives = [...(drives.previous || []), ...(drives.current ? [drives.current] : [])];
+        allDrives.forEach(d => {
+            (d.plays || []).forEach(p => {
+                const txt = p.text || '';
+                if (p.scoringPlay && txt.toUpperCase().includes('INTERCEPTED') && txt.toUpperCase().includes('TOUCHDOWN')) {
+                    const match = txt.match(/(?:\]|\)|^\s*)\s*([A-Z]\.[A-Za-z\-\']+)\s+pass/i);
+                    if (match) {
+                        const name = match[1].toUpperCase();
+                        pickSixCounts[name] = (pickSixCounts[name] || 0) + 1;
+                    }
+                }
+            });
+        });
+
+        const parsedPlayers = {};
+        const teamLiveStats = {};
+
+        [homeAbbr, awayAbbr].filter(Boolean).forEach(abbr => {
+            const lossProb = abbr === homeAbbr ? homeLossProb : awayLossProb;
+            const isLoss = abbr === homeAbbr ? homeIsLoss : awayIsLoss;
+            teamLiveStats[abbr] = {
+                player_id: `TEAM_${abbr}_regular`,
+                team: abbr,
+                position: 'TM_QB',
+                attempts: 0,
+                completions: 0,
+                passing_yards: 0,
+                passing_tds: 0,
+                interceptions: 0,
+                pick_sixes: 0,
+                rushing_yards: 0,
+                rushing_tds: 0,
+                fumbles_lost: 0,
+                sacks: 0,
+                team_loss_prob: lossProb,
+                team_loss: isLoss,
+                is_live: isLive,
+                is_final: isFinal,
+                players: {
+                    id: `TEAM_${abbr}_regular`,
+                    name: `${abbr} QBs`,
+                    team: abbr,
+                    position: 'TM_QB',
+                    headshot_url: `https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/${abbr.toLowerCase()}.png`
+                }
+            };
+        });
+
+        (gcData.boxscore?.players || []).forEach(tData => {
+            const tabbr = tData.team?.abbreviation;
+            const lossProb = tabbr === homeAbbr ? homeLossProb : awayLossProb;
+            const isLoss = tabbr === homeAbbr ? homeIsLoss : awayIsLoss;
+
+            // 1. Process Passing Statistics ONLY for QBs / Passers
+            const passingGroup = (tData.statistics || []).find(cat => cat.name === 'passing');
+            if (passingGroup) {
+                const keys = passingGroup.keys || [];
+                (passingGroup.athletes || []).forEach(ath => {
+                    const aid = ath.athlete?.id;
+                    if (!aid) return;
+                    const pid = `espn-${aid}`;
+                    const pname = ath.athlete?.displayName || '';
+                    const headshot = ath.athlete?.headshot?.href || `https://a.espncdn.com/i/headshots/nfl/players/full/${aid}.png`;
+                    const pos = ath.athlete?.position?.abbreviation || 'QB';
+
+                    if (!parsedPlayers[pid]) {
+                        parsedPlayers[pid] = {
+                            player_id: pid,
+                            name: pname,
+                            team: tabbr,
+                            position: pos,
+                            attempts: 0,
+                            completions: 0,
+                            passing_yards: 0,
+                            passing_tds: 0,
+                            interceptions: 0,
+                            pick_sixes: 0,
+                            rushing_yards: 0,
+                            rushing_tds: 0,
+                            fumbles_lost: 0,
+                            sacks: 0,
+                            team_loss_prob: lossProb,
+                            team_loss: isLoss,
+                            is_live: isLive,
+                            is_final: isFinal,
+                            players: {
+                                id: pid,
+                                name: pname,
+                                team: tabbr,
+                                position: pos,
+                                headshot_url: headshot
+                            }
+                        };
+                    }
+
+                    const obj = parsedPlayers[pid];
+                    const vals = ath.stats || [];
+                    const sdict = {};
+                    keys.forEach((k, i) => { sdict[k] = vals[i]; });
+
+                    const cp = sdict['completions/passingAttempts'] || '0/0';
+                    if (cp.includes('/')) {
+                        const [c, a] = cp.split('/');
+                        obj.completions = parseInt(c) || 0;
+                        obj.attempts = parseInt(a) || 0;
+                    }
+                    obj.passing_yards = parseInt(sdict['passingYards']) || 0;
+                    obj.passing_tds = parseInt(sdict['passingTouchdowns']) || 0;
+                    obj.interceptions = parseInt(sdict['interceptions']) || 0;
+                    const sck = sdict['sacks-sackYardsLost'] || '0-0';
+                    obj.sacks = parseInt(sck.split('-')[0]) || 0;
+
+                    Object.entries(pickSixCounts).forEach(([p6Name, cnt]) => {
+                        const parts = p6Name.split('.');
+                        if (parts.length === 2 && pname.toUpperCase().startsWith(parts[0]) && pname.toUpperCase().includes(parts[1])) {
+                            obj.pick_sixes += cnt;
+                        }
+                    });
+                });
+            }
+
+            // 2. Attach Rushing & Fumbles ONLY for QBs already in parsedPlayers
+            ['rushing', 'fumbles'].forEach(targetCat => {
+                const group = (tData.statistics || []).find(cat => cat.name === targetCat);
+                if (!group) return;
+                const keys = group.keys || [];
+                (group.athletes || []).forEach(ath => {
+                    const aid = ath.athlete?.id;
+                    const pid = `espn-${aid}`;
+                    if (!parsedPlayers[pid]) return; // ignore non-passers
+
+                    const obj = parsedPlayers[pid];
+                    const vals = ath.stats || [];
+                    const sdict = {};
+                    keys.forEach((k, i) => { sdict[k] = vals[i]; });
+
+                    if (targetCat === 'rushing') {
+                        obj.rushing_yards = parseInt(sdict['rushingYards']) || 0;
+                        obj.rushing_tds = parseInt(sdict['rushingTouchdowns']) || 0;
+                    } else if (targetCat === 'fumbles') {
+                        obj.fumbles_lost = parseInt(sdict['fumblesLost']) || 0;
+                    }
+                });
+            });
+        });
+
+        // Roll up into teamLiveStats
+        Object.values(parsedPlayers).forEach(pl => {
+            if (pl.team && teamLiveStats[pl.team] && pl.attempts > 0) {
+                const tls = teamLiveStats[pl.team];
+                tls.completions += pl.completions;
+                tls.attempts += pl.attempts;
+                tls.passing_yards += pl.passing_yards;
+                tls.passing_tds += pl.passing_tds;
+                tls.interceptions += pl.interceptions;
+                tls.pick_sixes += pl.pick_sixes;
+                tls.sacks += pl.sacks;
+                tls.rushing_yards += pl.rushing_yards;
+                tls.rushing_tds += pl.rushing_tds;
+                tls.fumbles_lost += pl.fumbles_lost;
+            }
+        });
+
+        return {
+            eventId: gcData.header?.id,
+            state,
+            detail,
+            isLive,
+            isFinal,
+            homeAbbr,
+            awayAbbr,
+            homeLossProb,
+            awayLossProb,
+            parsedPlayers,
+            teamLiveStats
+        };
+    },
+
     loadData: async (isSilent = false) => {
         const week = MatchupsView.state.selectedWeek;
         const leagueId = MatchupsView.state.selectedLeagueId;
@@ -208,13 +434,91 @@ export const MatchupsView = {
             // Save games
             MatchupsView.state.games = espnData.events || [];
 
-            // Build stats map by team and player_id
+            // 5. Fetch live / actual game summaries directly from ESPN
+            // In-progress games always fetch live boxscores. Completed games fetch if not yet in DB.
+            const dbTeams = new Set((statsRes.data || []).map(s => s.players?.team).filter(Boolean));
+            const gamesToFetch = (espnData.events || []).filter(ev => {
+                const st = ev.status?.type?.state;
+                if (st === 'in') return true;
+                if (st === 'post') {
+                    const comp = ev.competitions?.[0];
+                    const away = comp?.competitors?.find(c => c.homeAway === 'away')?.team?.abbreviation;
+                    const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.abbreviation;
+                    return !(dbTeams.has(away) && dbTeams.has(home));
+                }
+                return false;
+            });
+
+            const summaries = await Promise.all(
+                gamesToFetch.map(g => 
+                    fetch(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${g.id}`)
+                        .then(r => r.json())
+                        .catch(err => {
+                            console.warn(`Failed fetching summary for event ${g.id}:`, err);
+                            return null;
+                        })
+                )
+            );
+
+            // Parse each summary
+            const liveParsedPlayers = {};
+            const liveTeamStats = {};
+            const gameStates = {};
+            const gameLossProbs = {};
+
+            summaries.forEach(gcData => {
+                if (!gcData) return;
+                const parsed = MatchupsView.parseEspnSummary(gcData);
+                if (!parsed) return;
+
+                if (parsed.homeAbbr) {
+                    gameStates[parsed.homeAbbr] = { isLive: parsed.isLive, isFinal: parsed.isFinal, statusDetail: parsed.detail };
+                    gameLossProbs[parsed.homeAbbr] = parsed.homeLossProb;
+                }
+                if (parsed.awayAbbr) {
+                    gameStates[parsed.awayAbbr] = { isLive: parsed.isLive, isFinal: parsed.isFinal, statusDetail: parsed.detail };
+                    gameLossProbs[parsed.awayAbbr] = parsed.awayLossProb;
+                }
+
+                Object.assign(liveParsedPlayers, parsed.parsedPlayers);
+                Object.assign(liveTeamStats, parsed.teamLiveStats);
+            });
+
+            // Also note states for games that weren't fetched (e.g. pre-game scheduled or already finalized in DB)
+            (espnData.events || []).forEach(ev => {
+                const comp = ev.competitions?.[0];
+                const away = comp?.competitors?.find(c => c.homeAway === 'away')?.team?.abbreviation;
+                const home = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.abbreviation;
+                const st = ev.status?.type?.state;
+                const detail = ev.status?.type?.detail || '';
+                [away, home].filter(Boolean).forEach(abbr => {
+                    if (!gameStates[abbr]) {
+                        gameStates[abbr] = { isLive: st === 'in', isFinal: st === 'post', statusDetail: detail };
+                    }
+                });
+            });
+
+            MatchupsView.state.gameStates = gameStates;
+            MatchupsView.state.gameLossProbs = gameLossProbs;
+
+            // Build stats map by team and player_id (DB stats first, overwritten by live actuals)
             const statsMap = {};
             (statsRes.data || []).forEach(s => {
                 statsMap[s.player_id] = s;
             });
+            Object.entries(liveParsedPlayers).forEach(([pid, stat]) => {
+                statsMap[pid] = stat;
+            });
+            Object.entries(liveTeamStats).forEach(([pid, stat]) => {
+                statsMap[stat.player_id] = stat;
+            });
             MatchupsView.state.statsMap = statsMap;
-            MatchupsView.state.allStats = statsRes.data || [];
+
+            // Merge allStats array: retain DB stats for players not live, then append live stats
+            const livePids = new Set(Object.keys(liveParsedPlayers));
+            const mergedAllStats = (statsRes.data || []).filter(s => !livePids.has(s.player_id));
+            Object.values(liveParsedPlayers).forEach(lp => mergedAllStats.push(lp));
+            MatchupsView.state.allStats = mergedAllStats;
 
             // Build projections map
             const projectionsMap = {};
@@ -298,6 +602,9 @@ export const MatchupsView = {
     findQuarterbacksForTeam: (teamAbbr) => {
         const isTeamQBMode = MatchupsView.state.leagueScoringType === 'team_qb';
         const teamQBPid = `TEAM_${teamAbbr}_regular`;
+        const gameState = MatchupsView.state.gameStates?.[teamAbbr];
+        const isLiveGame = !!gameState?.isLive;
+        const isFinalGame = !!gameState?.isFinal;
 
         // If in Team QB mode, return the Team QB record
         if (isTeamQBMode) {
@@ -310,7 +617,7 @@ export const MatchupsView = {
                 const isQB = pos.includes('QB') || (s.attempts && s.attempts > 0);
                 const proj = MatchupsView.state.projectionsMap[s.player_id] || null;
                 const projAtt = MatchupsView.getProjectedAttempts(proj);
-                const hasPasses = (s.attempts && s.attempts > 0) || projAtt > 0;
+                const hasPasses = (s.attempts && s.attempts > 0) || projAtt > 0 || s.is_live;
                 return s.players?.team === teamAbbr && isQB && s.player_id !== teamQBPid && hasPasses;
             });
 
@@ -332,7 +639,7 @@ export const MatchupsView = {
         const qbs = [];
         const seenPids = new Set();
 
-        // 1. Any QB from player_stats for this team who threw passes or is projected to throw passes
+        // 1. Any QB from allStats for this team who threw passes, has live stats, or is projected to throw passes
         MatchupsView.state.allStats.forEach(s => {
             const p = s.players;
             if (!p) return;
@@ -343,8 +650,8 @@ export const MatchupsView = {
                 const projAtt = MatchupsView.getProjectedAttempts(proj);
                 const actualAtt = s.attempts || 0;
 
-                // Only include if they threw passes in the game OR are projected to throw passes
-                if (actualAtt > 0 || projAtt > 0) {
+                // Only include if they threw passes in the game, have live stats, or are projected to throw passes
+                if (actualAtt > 0 || projAtt > 0 || s.is_live) {
                     seenPids.add(s.player_id);
                     qbs.push({
                         id: s.player_id,
@@ -372,13 +679,70 @@ export const MatchupsView = {
                     // Filter out any player who is not projected to throw passes
                     if (projAtt > 0) {
                         seenPids.add(pr.player_id);
+
+                        let inGameStat = null;
+                        if (isLiveGame) {
+                            // In a live game, provide in-game live stat so actuals display
+                            inGameStat = {
+                                player_id: pr.player_id,
+                                week: MatchupsView.state.selectedWeek,
+                                season_type: 'regular',
+                                name: p.name,
+                                team: teamAbbr,
+                                position: 'QB',
+                                attempts: 0,
+                                completions: 0,
+                                passing_yards: 0,
+                                passing_tds: 0,
+                                interceptions: 0,
+                                pick_sixes: 0,
+                                rushing_yards: 0,
+                                rushing_tds: 0,
+                                fumbles_lost: 0,
+                                sacks: 0,
+                                team_loss_prob: MatchupsView.state.gameLossProbs?.[teamAbbr] ?? 0.5,
+                                team_loss: false,
+                                is_live: true,
+                                is_final: false,
+                                players: p
+                            };
+                        } else if (isFinalGame) {
+                            // In a completed game, if they had 0 attempts:
+                            // If drafted, track as 0-attempts (-20.0 penalty)
+                            if (MatchupsView.state.picksMap[pr.player_id]) {
+                                inGameStat = {
+                                    player_id: pr.player_id,
+                                    week: MatchupsView.state.selectedWeek,
+                                    season_type: 'regular',
+                                    name: p.name,
+                                    team: teamAbbr,
+                                    position: 'QB',
+                                    attempts: 0,
+                                    completions: 0,
+                                    passing_yards: 0,
+                                    passing_tds: 0,
+                                    interceptions: 0,
+                                    pick_sixes: 0,
+                                    rushing_yards: 0,
+                                    rushing_tds: 0,
+                                    fumbles_lost: 0,
+                                    sacks: 0,
+                                    team_loss_prob: 0,
+                                    team_loss: false,
+                                    is_live: false,
+                                    is_final: true,
+                                    players: p
+                                };
+                            }
+                        }
+
                         qbs.push({
                             id: pr.player_id,
                             name: p.name,
                             team: p.team,
                             position: 'QB',
                             headshot: p.headshot_url,
-                            stat: null,
+                            stat: inGameStat,
                             projection: pr,
                             ownership: MatchupsView.state.picksMap[pr.player_id] || null
                         });
@@ -536,7 +900,7 @@ export const MatchupsView = {
                             <div style="font-size: 0.7rem; font-weight: 800; color: var(--accent-secondary); text-transform: uppercase;">
                                 ${away.team?.abbreviation} Passer(s)
                             </div>
-                            ${awayQBs.length > 0 ? awayQBs.map(qb => MatchupsView.renderQBCard(qb, isLive || isFinal)).join('') : `<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 0.5rem;">No active QB projected</div>`}
+                            ${awayQBs.length > 0 ? awayQBs.map(qb => MatchupsView.renderQBCard(qb, { isLive, isFinal, statusDetail })).join('') : `<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 0.5rem;">No active QB projected</div>`}
                         </div>
 
                         <!-- Home QB Column -->
@@ -544,7 +908,7 @@ export const MatchupsView = {
                             <div style="font-size: 0.7rem; font-weight: 800; color: var(--accent-secondary); text-transform: uppercase;">
                                 ${home.team?.abbreviation} Passer(s)
                             </div>
-                            ${homeQBs.length > 0 ? homeQBs.map(qb => MatchupsView.renderQBCard(qb, isLive || isFinal)).join('') : `<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 0.5rem;">No active QB projected</div>`}
+                            ${homeQBs.length > 0 ? homeQBs.map(qb => MatchupsView.renderQBCard(qb, { isLive, isFinal, statusDetail })).join('') : `<div style="font-size: 0.75rem; color: var(--text-secondary); padding: 0.5rem;">No active QB projected</div>`}
                         </div>
                     </div>
                 </div>
@@ -552,13 +916,15 @@ export const MatchupsView = {
         `;
     },
 
-    renderQBCard: (qb, hasActuals) => {
+    renderQBCard: (qb, gameInfo = {}) => {
         const leagueId = MatchupsView.state.selectedLeagueId;
         const leagueSettings = MatchupsView.state.leagueSettings;
 
         // Calculate Fantasy Score
         let displayPoints = null;
         let isProjected = false;
+        const isLive = !!qb.stat?.is_live || (gameInfo.isLive && qb.stat);
+        const isFinal = !!qb.stat?.is_final || (gameInfo.isFinal && qb.stat);
 
         if (qb.stat) {
             displayPoints = calculateLeagueScore(qb.stat, leagueSettings);
@@ -571,6 +937,19 @@ export const MatchupsView = {
                 }
             } catch(e) {}
             displayPoints = calculateLeagueScore(raw, leagueSettings) || qb.projection.projected_custom_points || 0;
+        }
+
+        // Tag Class & Prefix for Points
+        let tagClass = 'worst-qb-tag';
+        let ptsPrefix = '';
+        if (isLive) {
+            tagClass = 'worst-qb-tag live';
+            ptsPrefix = '<span class="live-dot-small"></span> ';
+        } else if (isProjected) {
+            tagClass = 'worst-qb-tag projected';
+            ptsPrefix = 'Proj ';
+        } else if (isFinal) {
+            tagClass = 'worst-qb-tag final';
         }
 
         // Ownership Badge
@@ -589,13 +968,21 @@ export const MatchupsView = {
         let statsLine = '';
         if (qb.stat) {
             const s = qb.stat;
+            const att = s.attempts || 0;
+            const cmp = s.completions || 0;
+            const compPct = att > 0 ? Math.round((cmp / att) * 100) : 0;
+
             statsLine = `
                 <div class="qb-stats-summary">
-                    <strong>${s.completions || 0}/${s.attempts || 0}</strong> • <strong>${s.passing_yards || 0}</strong> yds • 
+                    ${isLive ? '<span style="color: #ef4444; font-weight: 800; margin-right: 0.35rem;">● LIVE:</span>' : ''}
+                    <strong>${cmp}/${att}</strong> (${compPct}%) • <strong>${s.passing_yards || 0}</strong> yds • 
                     <span style="color: ${s.passing_tds > 0 ? '#10b981' : 'inherit'}">${s.passing_tds || 0} TD</span> • 
                     <span style="color: ${s.interceptions > 0 ? 'var(--accent-primary)' : 'inherit'}; font-weight: bold;">${s.interceptions || 0} INT</span> 
                     ${s.pick_sixes > 0 ? `• <span style="color: #f43f5e; font-weight: 900;">${s.pick_sixes} P6</span>` : ''} 
                     • ${s.sacks || 0} Sck
+                    ${(s.rushing_yards || s.rushing_tds) ? `• ${s.rushing_yards || 0} rush yds ${s.rushing_tds ? `(${s.rushing_tds} rush TD)` : ''}` : ''}
+                    ${s.team_loss_prob !== undefined && isLive ? `• <span style="color: #fbbf24; font-size: 0.75rem;" title="Live Loss Probability">${Math.round(s.team_loss_prob * 100)}% loss prob</span>` : ''}
+                    ${s.team_loss && !isLive ? `• <span style="color: var(--accent-primary); font-weight: bold;">Loss (+5)</span>` : ''}
                 </div>
             `;
         } else if (qb.projection) {
@@ -639,8 +1026,8 @@ export const MatchupsView = {
                 <!-- Fantasy Points Row -->
                 <div class="qb-points-row">
                     <span style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 700;">Worst QB Pts:</span>
-                    <span class="worst-qb-tag ${isProjected ? 'projected' : ''}">
-                        ${displayPoints !== null ? `${isProjected ? 'Proj ' : ''}${displayPoints.toFixed(2)}` : '--'} pts
+                    <span class="${tagClass}">
+                        ${displayPoints !== null ? `${ptsPrefix}${displayPoints.toFixed(2)}` : '--'} pts
                     </span>
                 </div>
 
