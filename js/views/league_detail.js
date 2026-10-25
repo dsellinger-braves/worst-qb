@@ -135,6 +135,16 @@ export const LeagueDetailView = {
                                     <input type="number" step="0.1" id="s-no-att" class="form-input" style="width: 100px; text-align: right;">
                                 </div>
 
+                                <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Draft Configuration</h3>
+                                <div class="setting-row">
+                                    <label for="s-draft-type">Draft Order Format</label>
+                                    <select id="s-draft-type" class="form-input" style="width: 190px;">
+                                        <option value="snake">Snake Draft (Default)</option>
+                                        <option value="linear">Linear (Repeats)</option>
+                                    </select>
+                                </div>
+                                <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: -0.25rem; margin-bottom: 1rem;">Snake reverses pick order in Round 2 (1st pick in Round 1 gets last pick in Round 2). Linear repeats the same order.</p>
+
                                 <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; color: var(--accent-secondary); margin-bottom: 0.5rem;">Draft Order Override (Week <span id="s-draft-order-week"></span>)</h3>
                                 <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Drag and drop to manually set the draft order for the current active week. Leave default to use standings.</p>
                                 <ul id="s-draft-order-list" style="list-style: none; padding: 0; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
@@ -425,6 +435,8 @@ export const LeagueDetailView = {
             document.getElementById('s-team-loss').value = s.team_loss ?? 5.0;
             document.getElementById('s-no-att').value = s.no_attempts ?? -20.0;
             document.getElementById('s-comp-mult').value = s.completion_penalty_multiplier ?? 20.0;
+            const draftTypeSelect = document.getElementById('s-draft-type');
+            if (draftTypeSelect) draftTypeSelect.value = s.draft_type || 'snake';
             
             // Draft Order
             document.getElementById('s-draft-order-week').innerText = league.current_week;
@@ -515,6 +527,7 @@ export const LeagueDetailView = {
                 team_loss: parseFloat(document.getElementById('s-team-loss').value),
                 no_attempts: parseFloat(document.getElementById('s-no-att').value),
                 completion_penalty_multiplier: parseFloat(document.getElementById('s-comp-mult').value),
+                draft_type: document.getElementById('s-draft-type') ? document.getElementById('s-draft-type').value : 'snake',
                 draft_order_overrides: {
                     ...existingOverrides,
                     ...newOverrides
@@ -616,6 +629,12 @@ export const LeagueDetailView = {
         const sortedTeams = Object.values(teamsData).sort((a, b) => b.totalPoints - a.totalPoints);
         
         container.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                <span style="font-size: 0.9rem; color: var(--text-secondary);">Week ${week} Leaderboard</span>
+                <a href="#/scoreboard?league=${LeagueDetailView.leagueId}&week=${week}" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.4rem 0.9rem; display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none;">
+                    ⚡ Open Full Live Scoreboard
+                </a>
+            </div>
             <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
                 <tr style="border-bottom: 2px solid var(--glass-border); text-align: left;">
                     <th style="padding: 1rem 0.5rem;">Rank</th>

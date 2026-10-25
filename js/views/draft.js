@@ -392,22 +392,50 @@ export const DraftView = {
     },
 
     getDraftState: () => {
-        const { members, allPicks } = DraftView.state;
+        const { members, allPicks, leagueInfo } = DraftView.state;
+        const draftType = leagueInfo?.scoring_settings?.draft_type || 'snake';
+        const isSnake = draftType !== 'linear';
         
         // Check if Round 1 is complete
         const everyoneHasRound1 = members.every(m => {
             return (allPicks || []).filter(p => p.user_id === m.user_id).length >= 1;
         });
-        const targetPicks = everyoneHasRound1 ? 2 : 1;
         
-        for (let i = 0; i < members.length; i++) {
-            const member = members[i];
-            const theirPicks = (allPicks || []).filter(p => p.user_id === member.user_id);
-            if (theirPicks.length < targetPicks) {
-                return { isComplete: false, currentTurnUserId: member.user_id, currentTurnTeamName: member.team_name };
+        if (!everyoneHasRound1) {
+            // Round 1 order (members[0] ... members[N-1])
+            for (let i = 0; i < members.length; i++) {
+                const member = members[i];
+                const theirPicks = (allPicks || []).filter(p => p.user_id === member.user_id);
+                if (theirPicks.length < 1) {
+                    return { 
+                        isComplete: false, 
+                        round: 1, 
+                        pickInRound: i + 1, 
+                        overallPick: i + 1, 
+                        currentTurnUserId: member.user_id, 
+                        currentTurnTeamName: member.team_name 
+                    };
+                }
+            }
+        } else {
+            // Round 2 order (reversed if snake, linear if configured)
+            const r2Members = isSnake ? [...members].reverse() : members;
+            for (let i = 0; i < r2Members.length; i++) {
+                const member = r2Members[i];
+                const theirPicks = (allPicks || []).filter(p => p.user_id === member.user_id);
+                if (theirPicks.length < 2) {
+                    return { 
+                        isComplete: false, 
+                        round: 2, 
+                        pickInRound: i + 1, 
+                        overallPick: members.length + i + 1, 
+                        currentTurnUserId: member.user_id, 
+                        currentTurnTeamName: member.team_name 
+                    };
+                }
             }
         }
-        return { isComplete: true, currentTurnUserId: null, currentTurnTeamName: null };
+        return { isComplete: true, round: 2, overallPick: members.length * 2, currentTurnUserId: null, currentTurnTeamName: null };
     },
 
     checkIsAdmin: () => {
@@ -419,14 +447,18 @@ export const DraftView = {
         const listEl = document.getElementById('draft-order-list');
         const { members, allPicks, leagueInfo, userId, currentWeek } = DraftView.state;
         const isAdmin = DraftView.checkIsAdmin();
+        const draftType = leagueInfo?.scoring_settings?.draft_type || 'snake';
+        const isSnake = draftType !== 'linear';
         
         const overrides = leagueInfo?.scoring_settings?.draft_order_overrides || {};
-        if (overrides[currentWeek]) {
-            document.getElementById('draft-order-label').innerText = 'Manual Override Active';
-            document.getElementById('draft-order-label').style.color = 'var(--accent-primary)';
-        } else {
-            document.getElementById('draft-order-label').innerText = 'Inverse Season Standings';
-            document.getElementById('draft-order-label').style.color = 'var(--text-secondary)';
+        const baseOrderText = overrides[currentWeek] 
+            ? 'Manual Override Active' 
+            : (isSnake ? 'Snake Draft (Inverse Standings)' : 'Linear Draft (Inverse Standings)');
+        
+        const orderLabelEl = document.getElementById('draft-order-label');
+        if (orderLabelEl) {
+            orderLabelEl.innerHTML = `${baseOrderText} <span style="margin-left: 0.5rem; font-size: 0.75rem; background: ${isSnake ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)'}; color: ${isSnake ? '#10b981' : '#60a5fa'}; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid ${isSnake ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'};">${isSnake ? '🐍 Snake Draft' : 'Linear Draft'}</span>`;
+            orderLabelEl.style.color = overrides[currentWeek] ? 'var(--accent-primary)' : 'var(--text-secondary)';
         }
         
         if (members.length === 0) {
@@ -451,7 +483,8 @@ export const DraftView = {
             const commishBadge = isCommishDrafting 
                 ? `<span style="font-size: 0.8rem; color: #60a5fa; font-weight: normal; margin-left: 0.5rem; background: rgba(37,99,235,0.15); padding: 0.15rem 0.5rem; border-radius: 4px; border: 1px solid rgba(59,130,246,0.3);">Commish Drafting</span>` 
                 : '';
-            document.getElementById('draft-clock-team').innerHTML = `${draftState.currentTurnTeamName} ${commishBadge} ${adminBtn}`;
+            const roundBadge = `<span style="font-size: 0.8rem; background: rgba(255,255,255,0.12); padding: 0.15rem 0.5rem; border-radius: 4px; margin-right: 0.5rem; font-weight: 600; color: var(--accent-secondary);">Round ${draftState.round} • Pick #${draftState.overallPick}</span>`;
+            document.getElementById('draft-clock-team').innerHTML = `${roundBadge} ${draftState.currentTurnTeamName} ${commishBadge} ${adminBtn}`;
         }
 
         listEl.innerHTML = members.map((m, idx) => {
@@ -464,6 +497,8 @@ export const DraftView = {
                 undoBtn = `<button class="btn" style="padding: 0.1rem 0.4rem; font-size: 0.7rem; background: var(--accent-error); border: none; margin-left: 0.5rem;" onclick="undoPick('${m.user_id}')" title="Undo latest pick">Undo</button>`;
             }
 
+            const r1PickNum = idx + 1;
+            const r2PickNum = isSnake ? (2 * members.length - idx) : (members.length + idx + 1);
             const isOnClock = draftState.currentTurnUserId === m.user_id;
             const bgStyle = isOnClock ? 'background: rgba(37, 99, 235, 0.2); border: 1px solid #3b82f6;' : 'background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05);';
             const nameColor = isOnClock ? 'color: #93c5fd; font-weight: bold;' : '';
@@ -475,6 +510,7 @@ export const DraftView = {
                     <div>
                         <span style="font-weight: bold; color: var(--text-secondary); margin-right: 0.5rem;">${idx + 1}.</span>
                         <span style="font-size: 0.9rem; ${nameColor}">${m.team_name}</span>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary); margin-left: 0.4rem;">(Picks #${r1PickNum}, #${r2PickNum})</span>
                     </div>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                         <span style="font-size: 0.8rem; color: var(--text-secondary);">${m.season_points.toFixed(2)} pts</span>

@@ -44,7 +44,7 @@ Custom fantasy football game: each week, league members draft **2 players (norma
 - **Player IDs**: current IDs are `espn-<espnAthleteId>`. Team aggregate "players" use `TEAM_<ABBR>_<season_type>` with position `TM_QB`.
 - **`players.position`** is a `/`-joined list of ESPN eligible slots (e.g. `QB`, `RB/WR`, `TE`, `DST`), or `Unknown` / `TM_QB`. Use `.includes('QB')` for QB checks, and exclude `TM_QB` for individual leagues.
 - **Projection raw stats are stuffed into `player_projections.opponent`** as a JSON string `{"opp": "DAL", "raw": {...}}`. Parse defensively (`opponent.startsWith('{')`).
-- **Draft**: linear (not snake), 2 rounds per week. Order = `scoring_settings.draft_order_overrides[week]` if present, otherwise live inverse standings (worst team first).
+- **Draft**: defaults to snake draft (Round 1: 1 → N; Round 2: N → 1, reversing order), with commissioner-configurable option for linear draft. Base order = `scoring_settings.draft_order_overrides[week]` if present, otherwise live inverse standings (worst team first).
 - **League Lifecycle**: Admins can click **"Advance Week"** in League Home (`league_detail.js`) to advance `current_week`, reset `draft_status`, and persist current computed `season_points` into `league_members`. Standings are also computed dynamically across the app.
 
 ## Security & RLS
