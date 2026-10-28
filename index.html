@@ -14,7 +14,7 @@
     <!-- Supabase JS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- App Entry -->
-    <script type="module" src="js/app.js?v=1.8" defer></script>
+    <script type="module" src="js/app.js?v=1.9" defer></script>
 </head>
 <body>
     <div class="app-container">
@@ -72,17 +72,8 @@
                         <input type="email" id="auth-email" required style="width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.5); border: 1px solid var(--glass-border); border-radius: 6px; color: white;">
                     </div>
                     <div style="margin-bottom: 1.5rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <label style="color: var(--text-secondary); font-size: 0.9rem;">Password</label>
-                            <a href="#" id="auth-forgot-password" style="color: var(--accent-secondary); font-size: 0.8rem; text-decoration: none;">Forgot password?</a>
-                        </div>
+                        <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">Password</label>
                         <input type="password" id="auth-password" required minlength="6" style="width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.5); border: 1px solid var(--glass-border); border-radius: 6px; color: white;">
-                    </div>
-                    <div id="auth-opt-in-container" style="display: none; margin-bottom: 1.25rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.9rem; cursor: pointer;">
-                            <input type="checkbox" id="auth-opt-in" checked>
-                            Send me weekly recap emails
-                        </label>
                     </div>
 
                     <!-- Optional Claim Team on Signup -->

@@ -6,7 +6,7 @@ A custom fantasy football game where **bad is good**. Each week, every team draf
 - **Frontend:** a static site (vanilla HTML/CSS/JS, no build step) using hash routing. Open `index.html` through any static server, e.g. `python -m http.server 5500`.
 - **Backend:** [Supabase](https://supabase.com) (Postgres, Auth, Realtime for the live draft room).
 - **Stats:** `scraper/update_stats.py` pulls live box scores, projections and betting odds from ESPN. A GitHub Actions cron runs it every 15 minutes during game windows.
-- **Weekly recap:** `scraper/send_weekly_summary.py` writes a snarky recap with Gemini and emails it to league members who opted in.
+- **Weekly recap:** `scraper/send_weekly_summary.py` writes a snarky recap with Gemini and generates HTML summary reports.
 
 ## Features
 - League creation/joining, per-league custom scoring weights, admin-controlled draft order

@@ -1,7 +1,4 @@
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from google import genai
@@ -127,33 +124,6 @@ def generate_blog_post(league, current_week, members, weekly_standings):
         
     return html.strip()
 
-def send_email(recipients, subject, html_content):
-    sender = os.environ.get("GMAIL_USER")
-    password = os.environ.get("GMAIL_APP_PASSWORD")
-    
-    if not sender or not password:
-        print("Missing GMAIL_USER or GMAIL_APP_PASSWORD. Cannot send email.")
-        return
-        
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender, password)
-        
-        for recipient in recipients:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = sender
-            msg['To'] = recipient
-            part = MIMEText(html_content, 'html')
-            msg.attach(part)
-            server.sendmail(sender, [recipient], msg.as_string())
-            
-        server.quit()
-        print(f"Successfully sent individual emails to {len(recipients)} recipients.")
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-
 def main():
     supabase = get_supabase_client()
     if not supabase:
@@ -161,20 +131,6 @@ def main():
         
     if not os.environ.get("GEMINI_API_KEY"):
         print("Missing GEMINI_API_KEY. Exiting.")
-        return
-
-    # Fetch all users to map user_id -> email
-    # This requires the service role key!
-    try:
-        users_response = supabase.auth.admin.list_users()
-        user_emails = {}
-        for user in users_response:
-            # Check opt_in metadata (default true if not set)
-            opt_in = user.user_metadata.get('email_opt_in', True)
-            if opt_in:
-                user_emails[user.id] = user.email
-    except Exception as e:
-        print(f"Failed to fetch users from auth.admin. Ensure you are using the SUPABASE_SERVICE_ROLE_KEY. Error: {e}")
         return
 
     # Process each active league
@@ -264,32 +220,24 @@ def main():
                         </tr>
                 """
                 
-            # Note: Unsubscribe URL assumes standard local/production routing
-            email_html += """
+                email_html += """
                     </tbody>
                 </table>
                 
                 <div style="font-size: 0.8em; color: #6b7280; margin-top: 40px; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 20px;">
                     <p>Generated automatically by the Worst QB Commissioner Bot.</p>
-                    <p>Don't want to receive these emails? <a href="http://localhost:5500/#/settings" style="color: #1a56db;">Click here to update your Account Settings</a>.</p>
                 </div>
             </body>
             </html>
             """
             
-            # Collect emails for league members
-            recipients = []
-            for m in members:
-                uid = m['user_id']
-                if uid in user_emails and user_emails[uid]:
-                    recipients.append(user_emails[uid])
-                    
-            if recipients:
-                subject = f"Worst QB Recap: {league['name']} Week {current_week}"
-                print(f"Sending email to {len(recipients)} recipients...")
-                send_email(recipients, subject, email_html)
-            else:
-                print("No recipient emails found for this league (or all opted out).")
+            # Save generated recap to local file
+            os.makedirs("scraper/recaps", exist_ok=True)
+            clean_name = "".join(c if c.isalnum() else "_" for c in league['name']).strip("_")
+            recap_filename = f"scraper/recaps/recap_{clean_name}_week_{current_week}.html"
+            with open(recap_filename, "w", encoding="utf-8") as f:
+                f.write(email_html)
+            print(f"Recap successfully generated and saved to: {recap_filename}")
                 
         except Exception as e:
             print(f"Error processing league {league['name']}: {e}")

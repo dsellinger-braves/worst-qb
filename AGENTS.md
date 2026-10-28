@@ -11,14 +11,14 @@ Custom fantasy football game: each week, league members draft **2 players (norma
 | Frontend | Static vanilla HTML/CSS/JS (ES modules, **no build step, no npm**) | `index.html`, `css/`, `js/` |
 | Backend | Supabase (Postgres + Auth + Realtime), accessed directly from the browser | `js/supabase.js` |
 | Data ingest | Python scraper hitting ESPN public APIs, run by GitHub Actions cron | `scraper/update_stats.py`, `.github/workflows/live_stats.yml` |
-| Weekly email | Python + Gemini (`google-genai`) + Gmail SMTP, run manually | `scraper/send_weekly_summary.py` |
+| Weekly recap | Python + Gemini (`google-genai`), run manually | `scraper/send_weekly_summary.py` |
 | Schema | Base schema + ad-hoc migration files run by hand in the Supabase SQL editor | `schema*.sql` |
 
 ## Running locally
 
-- Frontend: serve the repo root over HTTP (ES modules won't load from `file://`). E.g. VS Code Live Server (port 5500, which the email footer link assumes) or `python -m http.server 5500`. It talks to the **production** Supabase project; there is no local/staging DB.
+- Frontend: serve the repo root over HTTP (ES modules won't load from `file://`). E.g. VS Code Live Server (port 5500) or `python -m http.server 5500`. It talks to the **production** Supabase project; there is no local/staging DB.
 - Python: venv at `.venv/` (Windows: `.venv\Scripts\Activate.ps1`), deps in `scraper/requirements.txt`.
-- Scripts need env vars `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the email script also accepts `SUPABASE_SERVICE_ROLE_KEY` and loads `.env` via python-dotenv, plus `GEMINI_API_KEY`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`).
+- Scripts need env vars `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the recap script also accepts `SUPABASE_SERVICE_ROLE_KEY` and loads `.env` via python-dotenv, plus `GEMINI_API_KEY`).
 - No automated tests exist. `test_nfl.py` is a leftover scratch script for the retired `nfl_data_py` source.
 
 ## Frontend conventions (follow these when adding features)

@@ -9,7 +9,7 @@ import { RulesView } from './views/rules.js?v=1.6';
 import { Router } from './router.js';
 import { supabase } from './supabase.js';
 
-import { SettingsView } from './views/settings.js?v=1.7';
+import { SettingsView } from './views/settings.js?v=1.8';
 import { MatchupsView } from './views/matchups.js?v=1.7';
 import { ScoreboardView } from './views/scoreboard.js?v=1.7';
 import { ClaimManager } from './claim.js?v=1.7';
@@ -51,8 +51,6 @@ const authTitle = document.getElementById('auth-title');
 const authSubmitBtn = document.getElementById('auth-submit-btn');
 const authSwitchMode = document.getElementById('auth-switch-mode');
 const authSwitchText = document.getElementById('auth-switch-text');
-const authOptInContainer = document.getElementById('auth-opt-in-container');
-const authForgotBtn = document.getElementById('auth-forgot-password');
 const authCloseBtn = document.getElementById('auth-close-btn');
 
 // Claim fields in Auth Modal
@@ -125,49 +123,19 @@ authSwitchMode.onclick = (e) => {
         authSubmitBtn.innerText = 'Sign Up';
         authSwitchText.innerText = 'Already have an account?';
         authSwitchMode.innerText = 'Login';
-        authOptInContainer.style.display = 'block';
         if (authClaimSection) authClaimSection.style.display = 'block';
-        if (authForgotBtn) authForgotBtn.style.display = 'none';
     } else {
         authTitle.innerText = 'Login';
         authSubmitBtn.innerText = 'Login';
         authSwitchText.innerText = "Don't have an account?";
         authSwitchMode.innerText = 'Sign up';
-        authOptInContainer.style.display = 'none';
         if (authClaimSection) {
             authClaimSection.style.display = 'none';
             if (authClaimCheck) authClaimCheck.checked = false;
             if (authClaimFields) authClaimFields.style.display = 'none';
         }
-        if (authForgotBtn) authForgotBtn.style.display = 'inline';
     }
 };
-
-if (authForgotBtn) {
-    authForgotBtn.onclick = async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('auth-email').value.trim();
-        if (!email) {
-            alert("Please enter your email in the field above first, then click 'Forgot password?'.");
-            return;
-        }
-        authForgotBtn.innerText = 'Sending...';
-        try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                redirectTo: window.location.origin + window.location.pathname
-            });
-            if (error) {
-                alert("Reset error: " + error.message);
-            } else {
-                alert("Password reset email sent! Check your inbox (and spam folder) for a link to reset your password.");
-            }
-        } catch (err) {
-            alert("Error sending reset email: " + err.message);
-        } finally {
-            authForgotBtn.innerText = 'Forgot password?';
-        }
-    };
-}
 
 authCloseBtn.onclick = () => {
     authModal.style.display = 'none';
@@ -177,7 +145,6 @@ authForm.onsubmit = async (e) => {
     e.preventDefault();
     const email = document.getElementById('auth-email').value.trim();
     const password = document.getElementById('auth-password').value;
-    const optIn = document.getElementById('auth-opt-in').checked;
     
     authSubmitBtn.disabled = true;
     authSubmitBtn.innerText = isSignUp ? 'Creating Account...' : 'Logging in...';
@@ -197,22 +164,28 @@ authForm.onsubmit = async (e) => {
         if (isSignUp) {
             const { data, error: signUpError } = await supabase.auth.signUp({ 
                 email, 
-                password,
-                options: {
-                    data: {
-                        email_opt_in: optIn
-                    }
-                }
+                password
             });
             if (signUpError) {
                 alert(signUpError.message);
             } else if (data?.user && (!data.user.identities || data.user.identities.length === 0)) {
-                alert("An account with this email already exists! Please log in, or click 'Forgot password?' if you need to reset it.");
+                alert("An account with this email already exists! Please log in with your password.");
             } else if (!data?.session) {
-                alert("Signup successful! Please check your email to confirm your account before logging in. Your team will be automatically claimed once you sign in!");
-                authModal.style.display = 'none';
+                // Try immediate sign-in with password if session was not returned by signUp
+                const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+                if (signInErr) {
+                    alert("Account created! You can now log in with your email and password.");
+                } else {
+                    alert("Account created successfully!");
+                    authModal.style.display = 'none';
+                    if (isClaiming) {
+                        await ClaimManager.checkPendingClaim();
+                    } else {
+                        router.navigate('dashboard');
+                    }
+                }
             } else {
-                alert("Signup successful!");
+                alert("Account created successfully!");
                 authModal.style.display = 'none';
                 if (isClaiming) {
                     await ClaimManager.checkPendingClaim();
