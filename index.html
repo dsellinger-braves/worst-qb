@@ -14,7 +14,7 @@
     <!-- Supabase JS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- App Entry -->
-    <script type="module" src="js/app.js?v=1.6" defer></script>
+    <script type="module" src="js/app.js?v=1.7" defer></script>
 </head>
 <body>
     <div class="app-container">
@@ -77,12 +77,31 @@
                         </div>
                         <input type="password" id="auth-password" required minlength="6" style="width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.5); border: 1px solid var(--glass-border); border-radius: 6px; color: white;">
                     </div>
-                    <div id="auth-opt-in-container" style="display: none; margin-bottom: 1.5rem;">
+                    <div id="auth-opt-in-container" style="display: none; margin-bottom: 1.25rem;">
                         <label style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.9rem; cursor: pointer;">
                             <input type="checkbox" id="auth-opt-in" checked>
                             Send me weekly recap emails
                         </label>
                     </div>
+
+                    <!-- Optional Claim Team on Signup -->
+                    <div id="auth-claim-section" style="display: none; margin-bottom: 1.25rem; padding: 0.85rem; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); border-radius: 8px;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; color: var(--accent-secondary); font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                            <input type="checkbox" id="auth-claim-check">
+                            Claim an existing team in a league
+                        </label>
+                        <div id="auth-claim-fields" style="display: none; margin-top: 0.75rem; flex-direction: column; gap: 0.5rem;">
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">League</label>
+                                <select id="auth-claim-league" class="form-input" style="width: 100%; font-size: 0.85rem; padding: 0.45rem;"></select>
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Team to Claim</label>
+                                <select id="auth-claim-team" class="form-input" style="width: 100%; font-size: 0.85rem; padding: 0.45rem;"></select>
+                            </div>
+                        </div>
+                    </div>
+
                     <div style="display: flex; flex-direction: column; gap: 1rem;">
                         <button type="submit" id="auth-submit-btn" class="btn btn-primary" style="width: 100%; justify-content: center;">Login</button>
                         <div style="text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
@@ -92,6 +111,44 @@
                     </div>
                 </form>
                 <button id="auth-close-btn" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer;">&times;</button>
+            </div>
+        </div>
+
+        <!-- Standalone Claim Team Modal -->
+        <div id="claim-team-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1100; align-items: center; justify-content: center; padding: 1rem; overflow-y: auto;">
+            <div class="glass-panel" style="max-width: 480px; width: 100%; padding: 2rem; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+                <button id="claim-modal-close" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer; line-height: 1;">&times;</button>
+                <h2 style="margin-bottom: 0.5rem; color: var(--accent-primary); font-size: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                    🏷️ Claim Your Team
+                </h2>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem; line-height: 1.4;">
+                    Take ownership of a manually created team. All past drafted players, weekly points, and season standings will transfer directly to your account.
+                </p>
+
+                <form id="claim-team-form" onsubmit="event.preventDefault();">
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; margin-bottom: 0.35rem; color: var(--text-secondary); font-size: 0.85rem;">League</label>
+                        <select id="claim-modal-league" class="form-input" style="width: 100%; padding: 0.6rem;"></select>
+                    </div>
+
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; margin-bottom: 0.35rem; color: var(--text-secondary); font-size: 0.85rem;">Select Team to Claim</label>
+                        <select id="claim-modal-team" class="form-input" style="width: 100%; padding: 0.6rem;"></select>
+                    </div>
+
+                    <div id="claim-team-preview" style="margin-bottom: 1.25rem; padding: 0.75rem 1rem; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; font-size: 0.85rem; display: none;"></div>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <label style="display: block; margin-bottom: 0.35rem; color: var(--text-secondary); font-size: 0.85rem;">Your Team Name (optional rename)</label>
+                        <input type="text" id="claim-modal-name" class="form-input" style="width: 100%; padding: 0.6rem;" placeholder="Keep current name or enter a new one">
+                    </div>
+
+                    <div id="claim-modal-msg" style="display: none; margin-bottom: 1rem; font-size: 0.85rem;"></div>
+
+                    <button type="submit" id="claim-modal-submit" class="btn btn-primary" style="width: 100%; justify-content: center; font-weight: 700; padding: 0.75rem;">
+                        Claim Team & Transfer Roster
+                    </button>
+                </form>
             </div>
         </div>
     </div>

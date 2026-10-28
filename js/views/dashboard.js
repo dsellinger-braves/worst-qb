@@ -12,7 +12,10 @@ export const DashboardView = {
             <div style="margin-top: 2rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 1rem;">
                     <h2 style="margin: 0;">Your Leagues</h2>
-                    <a href="#/leagues" class="btn btn-primary" style="text-decoration: none; font-size: 0.9rem;">+ Join or Create League</a>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        <button onclick="window.openClaimTeamModal()" class="btn" style="background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); color: #fff; font-size: 0.9rem; cursor: pointer;">🏷️ Claim Existing Team</button>
+                        <a href="#/leagues" class="btn btn-primary" style="text-decoration: none; font-size: 0.9rem;">+ Join or Create League</a>
+                    </div>
                 </div>
                 <div id="user-leagues-list" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
                     <!-- Populated dynamically -->
@@ -91,7 +94,10 @@ export const DashboardView = {
             } else {
                 document.getElementById('user-leagues-list').innerHTML = `
                     <p style="color: var(--text-secondary);">You are not in any leagues yet.</p>
-                    <div><a href="#/leagues" class="btn btn-primary" style="text-decoration: none;">Browse or Create a League</a></div>
+                    <div style="display: flex; gap: 1rem; align-items: center; margin-top: 0.5rem; flex-wrap: wrap;">
+                        <a href="#/leagues" class="btn btn-primary" style="text-decoration: none;">Browse or Create a League</a>
+                        <button onclick="window.openClaimTeamModal()" class="btn" style="background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); color: #fff; cursor: pointer;">🏷️ Claim an Existing Team</button>
+                    </div>
                 `;
             }
         } else {

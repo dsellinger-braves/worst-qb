@@ -1,5 +1,6 @@
 import { supabase } from '../supabase.js';
 import { calculateLeagueScore } from '../scoring.js';
+import { ClaimManager } from '../claim.js?v=1.7';
 
 export const LeagueDetailView = {
     render: () => `
@@ -15,6 +16,15 @@ export const LeagueDetailView = {
                     <button id="ld-draft-btn" class="btn btn-primary" style="display: none;">Enter Draft Room</button>
                 </div>
             </div>
+
+            <!-- Non-Member Team Claim Banner -->
+            <div id="ld-claim-banner" style="display: none; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div>
+                    <strong style="color: #60a5fa; font-size: 1rem;">Have a team in this league?</strong>
+                    <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--text-secondary);">If your commissioner drafted or created a team for you, claim it to take control of your roster and picks!</p>
+                </div>
+                <button id="ld-banner-claim-btn" class="btn btn-primary" style="font-size: 0.9rem; padding: 0.5rem 1rem;">🏷️ Claim Your Team</button>
+            </div>
             
             <!-- Tabs -->
             <div class="tabs" style="display: flex; gap: 1rem; border-bottom: 1px solid var(--glass-border); margin-bottom: 2rem; overflow-x: auto;">
@@ -27,7 +37,10 @@ export const LeagueDetailView = {
             <div id="tab-standings" class="tab-content" style="display: block;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
                     <h2 style="margin: 0;">Teams & Standings</h2>
-                    <button id="ld-add-member-btn" class="btn" style="display: none; font-size: 0.85rem; padding: 0.4rem 0.8rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa;">+ Add Team (No Account)</button>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                        <button id="ld-copy-claim-link-btn" class="btn" style="display: none; font-size: 0.85rem; padding: 0.4rem 0.8rem; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--glass-border); color: #fff;">🔗 Copy Claim Link</button>
+                        <button id="ld-add-member-btn" class="btn" style="display: none; font-size: 0.85rem; padding: 0.4rem 0.8rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa;">+ Add Team (No Account)</button>
+                    </div>
                 </div>
 
                 <div id="ld-add-member-panel" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
@@ -173,7 +186,25 @@ export const LeagueDetailView = {
 
         // Fetch League info
         const { data: league, error: lErr } = await supabase.from('leagues').select('*').eq('id', leagueId).single();
-        if (lErr) return document.getElementById('ld-title').innerText = "Error loading league";
+        if (lErr) {
+            const { data: { session: checkSession } } = await supabase.auth.getSession();
+            if (!checkSession) {
+                document.getElementById('ld-title').innerText = "Please Log In";
+                document.getElementById('ld-status').innerText = "You must be logged in to view league details and claim a team.";
+                const teamsContainer = document.getElementById('ld-teams');
+                if (teamsContainer) {
+                    teamsContainer.innerHTML = `
+                        <div style="text-align: center; padding: 2.5rem 1rem; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                            <p style="margin-bottom: 1.25rem; color: var(--text-secondary); font-size: 1rem;">Log in or create an account to view this league and claim your team.</p>
+                            <button onclick="document.getElementById('auth-modal').style.display='flex';" class="btn btn-primary" style="font-size: 1rem; padding: 0.6rem 1.5rem;">Log In / Create Account</button>
+                        </div>
+                    `;
+                }
+            } else {
+                document.getElementById('ld-title').innerText = "Error loading league";
+            }
+            return;
+        }
         
         document.getElementById('ld-title').innerText = league.name;
         document.getElementById('ld-status').innerText = `Week ${league.current_week} | Draft Status: ${league.draft_status}`;
@@ -192,7 +223,7 @@ export const LeagueDetailView = {
         let isAdmin = false;
 
         const { data: teams, error: tErr } = await supabase.from('league_members')
-            .select('user_id, team_name, season_points, is_admin')
+            .select('user_id, team_name, season_points, is_admin, is_claimed')
             .eq('league_id', leagueId);
         if (teams) {
             LeagueDetailView.teams = teams;
@@ -200,6 +231,41 @@ export const LeagueDetailView = {
             const myMember = teams.find(t => t.user_id === currentUserId);
             if ((league.created_by && league.created_by === currentUserId) || (myMember && myMember.is_admin)) {
                 isAdmin = true;
+            }
+        }
+
+        LeagueDetailView.currentUserId = currentUserId;
+        LeagueDetailView.isAdmin = isAdmin;
+        LeagueDetailView.isMember = Boolean(teams && teams.some(t => t.user_id === currentUserId));
+
+        // Load claimable teams
+        LeagueDetailView.claimableTeams = await ClaimManager.getClaimableTeams(leagueId);
+        LeagueDetailView.claimableIds = new Set(LeagueDetailView.claimableTeams.map(t => t.user_id));
+
+        // Setup Claim Banner for non-members
+        const claimBanner = document.getElementById('ld-claim-banner');
+        const bannerClaimBtn = document.getElementById('ld-banner-claim-btn');
+        if (claimBanner && bannerClaimBtn) {
+            if (!LeagueDetailView.isMember && LeagueDetailView.claimableTeams.length > 0) {
+                claimBanner.style.display = 'flex';
+                bannerClaimBtn.onclick = () => ClaimManager.openClaimModal(leagueId);
+            } else {
+                claimBanner.style.display = 'none';
+            }
+        }
+
+        // Setup Copy Claim Link for commissioner
+        const copyClaimLinkBtn = document.getElementById('ld-copy-claim-link-btn');
+        if (copyClaimLinkBtn) {
+            if (isAdmin) {
+                copyClaimLinkBtn.style.display = 'inline-block';
+                copyClaimLinkBtn.onclick = () => {
+                    const claimUrl = `${window.location.origin}${window.location.pathname}#/claim?league=${leagueId}`;
+                    navigator.clipboard.writeText(claimUrl);
+                    alert(`Claim link copied to clipboard!\n\nShare this link with your league members to let them claim their team:\n${claimUrl}`);
+                };
+            } else {
+                copyClaimLinkBtn.style.display = 'none';
             }
         }
 
@@ -598,12 +664,46 @@ export const LeagueDetailView = {
             teamsContainer.innerHTML = '<p>No teams in this league yet.</p>';
             return;
         }
-        teamsContainer.innerHTML = LeagueDetailView.teams.map((t, idx) => `
-            <div style="background: rgba(0,0,0,0.2); padding: 1.5rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05);">
-                <div style="font-size: 1.2rem;"><strong>${idx + 1}. ${t.team_name}</strong></div>
+
+        teamsContainer.innerHTML = LeagueDetailView.teams.map((t, idx) => {
+            const isClaimable = LeagueDetailView.claimableIds && LeagueDetailView.claimableIds.has(t.user_id);
+            const isMyTeam = LeagueDetailView.currentUserId && t.user_id === LeagueDetailView.currentUserId;
+            
+            let actionBadgeHtml = '';
+            if (isMyTeam) {
+                actionBadgeHtml = `<span style="background: rgba(56, 189, 248, 0.2); color: var(--accent-secondary); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 4px; padding: 0.25rem 0.6rem; font-size: 0.75rem; font-weight: 600;">Your Team</span>`;
+            } else if (isClaimable) {
+                if (!LeagueDetailView.isMember) {
+                    actionBadgeHtml = `
+                        <button onclick="window.ClaimManager.openClaimModal('${LeagueDetailView.leagueId}', '${t.user_id}')" class="btn btn-primary" style="font-size: 0.8rem; padding: 0.35rem 0.75rem; white-space: nowrap;">
+                            🏷️ Claim This Team
+                        </button>
+                    `;
+                } else if (LeagueDetailView.isAdmin) {
+                    const escName = (t.team_name || 'team').replace(/'/g, "\\'");
+                    actionBadgeHtml = `
+                        <div style="display: flex; gap: 0.4rem; align-items: center;">
+                            <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.75rem; font-weight: 600;">⏳ Unclaimed</span>
+                            <button onclick="navigator.clipboard.writeText('${window.location.origin}${window.location.pathname}#/claim?league=${LeagueDetailView.leagueId}&team=${t.user_id}'); alert('Claim link for team ${escName} copied to clipboard!');" title="Copy Claim Link for this team" class="btn" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); color: #fff; cursor: pointer;">
+                                📋 Invite Link
+                            </button>
+                        </div>
+                    `;
+                }
+            } else if (LeagueDetailView.isAdmin && !t.is_admin) {
+                actionBadgeHtml = `<span style="background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 4px; padding: 0.2rem 0.5rem; font-size: 0.75rem;">👤 Claimed</span>`;
+            }
+
+            return `
+            <div style="background: rgba(0,0,0,0.2); padding: 1.25rem 1.5rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid rgba(255,255,255,0.05); flex-wrap: wrap; gap: 0.75rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <div style="font-size: 1.2rem;"><strong>${idx + 1}. ${t.team_name}</strong></div>
+                    ${actionBadgeHtml}
+                </div>
                 <div style="color: var(--accent-primary); font-weight: bold; font-size: 1.5rem;">${t.season_points.toFixed(2)} pts</div>
             </div>
-        `).join('');
+            `;
+        }).join('');
     },
     
     renderWeeklyView: (week) => {
@@ -707,3 +807,5 @@ export const LeagueDetailView = {
         `;
     }
 };
+
+window.LeagueDetailView = LeagueDetailView;

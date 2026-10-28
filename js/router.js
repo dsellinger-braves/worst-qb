@@ -44,7 +44,17 @@ export class Router {
     }
 
     async renderRoute(routeName, params = {}) {
-        if (!this.routes[routeName]) return;
+        if (!this.routes[routeName]) {
+            if (routeName === 'claim') {
+                const fallbackRoute = params.league ? 'league_detail' : 'leagues';
+                await this.renderRoute(fallbackRoute, params);
+                import('./claim.js?v=1.7').then(({ ClaimManager }) => {
+                    ClaimManager.openClaimModal(params.league, params.team);
+                });
+                return;
+            }
+            return;
+        }
 
         // Manage League Sub-Navigation Context
         const leagueNav = document.getElementById('league-nav');
@@ -95,6 +105,13 @@ export class Router {
         // Execute any initialization logic for the view
         if (typeof this.routes[routeName].init === 'function') {
             this.routes[routeName].init(params);
+        }
+
+        // If claim query parameter was passed, open claim modal
+        if (params.claim === 'true' || params.claim === '1') {
+            import('./claim.js?v=1.7').then(({ ClaimManager }) => {
+                ClaimManager.openClaimModal(params.league, params.team);
+            });
         }
     }
 }
