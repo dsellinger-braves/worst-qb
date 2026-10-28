@@ -1,6 +1,7 @@
 import { supabase } from '../supabase.js';
-import { calculateLeagueScore } from '../scoring.js';
+import { calculateLeagueScore, calculateLeagueScoreBreakdown } from '../scoring.js?v=1.8';
 import { ClaimManager } from '../claim.js?v=1.7';
+import { PickOfPicks } from '../pick_of_picks.js?v=1.7';
 
 export const LeagueDetailView = {
     render: () => `
@@ -11,6 +12,7 @@ export const LeagueDetailView = {
                     <p id="ld-status" style="color: var(--text-secondary);"></p>
                 </div>
                 <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                    <button id="ld-pick-picks-btn" class="btn" style="display: none; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);">🎯 Pick of the Picks</button>
                     <button id="ld-advance-week-btn" class="btn" style="display: none; background: rgba(56, 189, 248, 0.2); color: var(--accent-secondary); border: 1px solid var(--accent-secondary);">Advance Week</button>
                     <button id="ld-settings-btn" class="btn" style="display: none;">League Settings</button>
                     <button id="ld-draft-btn" class="btn btn-primary" style="display: none;">Enter Draft Room</button>
@@ -29,6 +31,7 @@ export const LeagueDetailView = {
             <!-- Tabs -->
             <div class="tabs" style="display: flex; gap: 1rem; border-bottom: 1px solid var(--glass-border); margin-bottom: 2rem; overflow-x: auto;">
                 <button class="tab-btn active" data-tab="standings" style="background: none; border: none; color: var(--text-primary); padding: 0.5rem 1rem; cursor: pointer; border-bottom: 2px solid var(--accent-primary); font-weight: bold;">Season Standings</button>
+                <button class="tab-btn" data-tab="cumulative" style="background: none; border: none; color: var(--text-secondary); padding: 0.5rem 1rem; cursor: pointer; font-weight: bold;">📊 Cumulative Scoring</button>
                 <button class="tab-btn" data-tab="weekly" style="background: none; border: none; color: var(--text-secondary); padding: 0.5rem 1rem; cursor: pointer; font-weight: bold;">Weekly Performance</button>
                 <button class="tab-btn" data-tab="team" style="background: none; border: none; color: var(--text-secondary); padding: 0.5rem 1rem; cursor: pointer; font-weight: bold;">Team Performance</button>
             </div>
@@ -56,6 +59,23 @@ export const LeagueDetailView = {
 
                 <div id="ld-teams" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
                     Loading teams...
+            </div>
+            
+            <!-- Tab Content: Cumulative Scoring -->
+            <div id="tab-cumulative" class="tab-content" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+                    <div>
+                        <h2 style="margin: 0; font-size: 1.4rem;">Cumulative Season Scoring by Team</h2>
+                        <p style="margin: 0.25rem 0 0; color: var(--text-secondary); font-size: 0.85rem;">All regular season stats and scoring category breakdowns across all weeks.</p>
+                    </div>
+                    <a id="ld-open-full-cum-link" href="#/cumulative" class="btn btn-primary" style="font-size: 0.85rem; padding: 0.45rem 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">
+                        📊 Open Full Analytics Matrix
+                    </a>
+                </div>
+                <div id="ld-cumulative-table" style="overflow-x: auto;">
+                    <div class="loading-state" style="height: 200px; display: flex; align-items: center; justify-content: center;">
+                        <div class="spinner"></div>
+                    </div>
                 </div>
             </div>
             
@@ -163,6 +183,9 @@ export const LeagueDetailView = {
                                 <ul id="s-draft-order-list" style="list-style: none; padding: 0; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
                                     <!-- Draggable items injected here -->
                                 </ul>
+                                <button type="button" id="s-open-pop-btn" class="btn" style="width: 100%; justify-content: center; font-size: 0.85rem; padding: 0.55rem; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; font-weight: 600;">
+                                    🎯 Open "Pick of the Picks" Selection Ceremony
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -266,6 +289,19 @@ export const LeagueDetailView = {
                 };
             } else {
                 copyClaimLinkBtn.style.display = 'none';
+            }
+        }
+
+        // Setup Pick of the Picks Header Button for Commissioner
+        const popHeaderBtn = document.getElementById('ld-pick-picks-btn');
+        if (popHeaderBtn) {
+            if (isAdmin) {
+                popHeaderBtn.style.display = 'inline-block';
+                popHeaderBtn.onclick = () => {
+                    PickOfPicks.openModal(leagueId, league.current_week);
+                };
+            } else {
+                popHeaderBtn.style.display = 'none';
             }
         }
 
@@ -479,11 +515,22 @@ export const LeagueDetailView = {
         LeagueDetailView.setupTabs();
         LeagueDetailView.setupSelectors();
 
+        // Update full cumulative matrix link
+        const fullCumLink = document.getElementById('ld-open-full-cum-link');
+        if (fullCumLink) fullCumLink.href = `#/cumulative?league=${leagueId}`;
+
         // Initial Renders
         LeagueDetailView.renderStandings();
+        LeagueDetailView.renderCumulativeTab(picks, statsMap, league.scoring_settings);
         LeagueDetailView.renderWeeklyView(LeagueDetailView.maxWeek);
         if (LeagueDetailView.teams.length > 0) {
             LeagueDetailView.renderTeamView(LeagueDetailView.teams[0].user_id);
+        }
+
+        // Auto-select tab if specified in URL query
+        if (params?.tab) {
+            const targetTabBtn = document.querySelector(`.tab-btn[data-tab="${params.tab}"]`);
+            if (targetTabBtn) targetTabBtn.click();
         }
     },
     setupAdminSettings: (league) => {
@@ -567,6 +614,14 @@ export const LeagueDetailView = {
         modal.onclick = (e) => {
             if (e.target === modal) modal.style.display = 'none';
         };
+
+        const sPopBtn = document.getElementById('s-open-pop-btn');
+        if (sPopBtn) {
+            sPopBtn.onclick = () => {
+                modal.style.display = 'none';
+                PickOfPicks.openModal(league.id, league.current_week);
+            };
+        }
         
         document.getElementById('ld-settings-form').onsubmit = async (e) => {
             e.preventDefault();
@@ -704,6 +759,121 @@ export const LeagueDetailView = {
             </div>
             `;
         }).join('');
+    },
+    
+    renderCumulativeTab: (picks, statsMap, settings) => {
+        const container = document.getElementById('ld-cumulative-table');
+        if (!container) return;
+
+        if (!picks || picks.length === 0) {
+            container.innerHTML = `<div style="padding: 2.5rem; text-align: center; background: rgba(0,0,0,0.2); border-radius: 8px; color: var(--text-secondary);">No draft picks or stats recorded yet for this league.</div>`;
+            return;
+        }
+
+        // Aggregate by member
+        const teamMap = {};
+        (LeagueDetailView.teams || []).forEach(t => {
+            teamMap[t.user_id] = {
+                team_name: t.team_name,
+                user_id: t.user_id,
+                ints: 0,
+                pick_sixes: 0,
+                sacks: 0,
+                fumbles_lost: 0,
+                team_losses: 0,
+                comp_pen: 0,
+                pass_yds: 0,
+                pass_tds: 0,
+                rush_yds: 0,
+                rush_tds: 0,
+                total_pts: 0,
+                starts: 0
+            };
+        });
+
+        picks.forEach(p => {
+            if (!teamMap[p.user_id]) {
+                teamMap[p.user_id] = {
+                    team_name: p.team_name || 'Team',
+                    user_id: p.user_id,
+                    ints: 0,
+                    pick_sixes: 0,
+                    sacks: 0,
+                    fumbles_lost: 0,
+                    team_losses: 0,
+                    comp_pen: 0,
+                    pass_yds: 0,
+                    pass_tds: 0,
+                    rush_yds: 0,
+                    rush_tds: 0,
+                    total_pts: 0,
+                    starts: 0
+                };
+            }
+            const tm = teamMap[p.user_id];
+            const stat = statsMap?.[`${p.player_id}_${p.week}`];
+            const b = calculateLeagueScoreBreakdown(stat, settings);
+
+            tm.starts += 1;
+            tm.ints += b.interceptions;
+            tm.pick_sixes += b.pick_sixes;
+            tm.sacks += b.sacks;
+            tm.fumbles_lost += b.fumbles_lost;
+            tm.team_losses += b.team_losses;
+            tm.comp_pen += b.comp_penalty_pts;
+            tm.pass_yds += b.passing_yards;
+            tm.pass_tds += b.passing_tds;
+            tm.rush_yds += b.rushing_yards;
+            tm.rush_tds += b.rushing_tds;
+            tm.total_pts += b.total_points;
+        });
+
+        const sortedTeams = Object.values(teamMap).sort((a, b) => b.total_pts - a.total_pts);
+
+        container.innerHTML = `
+            <table style="width: 100%; border-collapse: collapse; min-width: 820px; font-size: 0.9rem;">
+                <thead>
+                    <tr style="border-bottom: 2px solid var(--glass-border); text-align: right; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">
+                        <th style="padding: 0.85rem 0.5rem; text-align: left;">Rank / Team</th>
+                        <th style="padding: 0.85rem 0.5rem;" title="Starts">Starts</th>
+                        <th style="padding: 0.85rem 0.5rem; color: #f87171;" title="Interceptions">INT</th>
+                        <th style="padding: 0.85rem 0.5rem; color: #ef4444;" title="Pick Sixes">Pick-6</th>
+                        <th style="padding: 0.85rem 0.5rem; color: #fb923c;" title="Sacks Taken">Sacks</th>
+                        <th style="padding: 0.85rem 0.5rem; color: #fbbf24;" title="Fumbles Lost">Fum</th>
+                        <th style="padding: 0.85rem 0.5rem; color: #ca8a04;" title="Team Losses">Loss</th>
+                        <th style="padding: 0.85rem 0.5rem; color: #e879f9;" title="Incompletion Penalty Pts">Comp Pen</th>
+                        <th style="padding: 0.85rem 0.5rem;" title="Passing Yards">Pass Yds</th>
+                        <th style="padding: 0.85rem 0.5rem;" title="Passing Touchdowns">Pass TD</th>
+                        <th style="padding: 0.85rem 0.5rem;" title="Rushing Yards">Rush Yds</th>
+                        <th style="padding: 0.85rem 0.5rem;" title="Rushing Touchdowns">Rush TD</th>
+                        <th style="padding: 0.85rem 0.75rem; color: var(--accent-primary); font-size: 0.95rem;">Total Pts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${sortedTeams.map((t, idx) => `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 0.85rem 0.5rem; text-align: left;">
+                                <div style="font-weight: 700; color: #fff;">${idx + 1}. ${t.team_name}</div>
+                            </td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; color: var(--text-secondary);">${t.starts}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; font-weight: 600; color: #f87171;">${t.ints}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; font-weight: 600; color: #ef4444;">${t.pick_sixes}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; font-weight: 600; color: #fb923c;">${t.sacks}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; font-weight: 600; color: #fbbf24;">${t.fumbles_lost}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; font-weight: 600; color: #ca8a04;">${t.team_losses}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; font-weight: 600; color: #e879f9;">+${t.comp_pen.toFixed(1)}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; color: var(--text-secondary);">${t.pass_yds.toLocaleString()}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; color: var(--text-secondary);">${t.pass_tds}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; color: var(--text-secondary);">${t.rush_yds.toLocaleString()}</td>
+                            <td style="padding: 0.85rem 0.5rem; text-align: right; color: var(--text-secondary);">${t.rush_tds}</td>
+                            <td style="padding: 0.85rem 0.75rem; text-align: right; font-weight: 800; font-size: 1.05rem; color: var(--accent-primary);">
+                                ${t.total_pts.toFixed(2)}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
     },
     
     renderWeeklyView: (week) => {

@@ -1,10 +1,10 @@
 import { DashboardView } from './views/dashboard.js?v=1.7';
 import { LeaguesView } from './views/leagues.js?v=1.7';
-import { LeagueDetailView } from './views/league_detail.js?v=1.7';
+import { LeagueDetailView } from './views/league_detail.js?v=1.8';
 import { ProjectionsView } from './views/projections.js?v=1.6';
 import { StatsView } from './views/stats.js?v=1.6';
 import { PlayerProfileView } from './views/player_profile.js?v=1.6';
-import { DraftView } from './views/draft.js?v=1.6';
+import { DraftView } from './views/draft.js?v=1.8';
 import { RulesView } from './views/rules.js?v=1.6';
 import { Router } from './router.js';
 import { supabase } from './supabase.js';
@@ -13,6 +13,8 @@ import { SettingsView } from './views/settings.js?v=1.7';
 import { MatchupsView } from './views/matchups.js?v=1.7';
 import { ScoreboardView } from './views/scoreboard.js?v=1.7';
 import { ClaimManager } from './claim.js?v=1.7';
+import { CumulativeScoringView } from './views/cumulative_scoring.js?v=1.8';
+import { PickOfPicks } from './pick_of_picks.js?v=1.8';
 
 // Define Routes
 const routes = {
@@ -26,7 +28,8 @@ const routes = {
     'rules': RulesView,
     'settings': SettingsView,
     'matchups': MatchupsView,
-    'scoreboard': ScoreboardView
+    'scoreboard': ScoreboardView,
+    'cumulative': CumulativeScoringView
 };
 
 // Initialize Router

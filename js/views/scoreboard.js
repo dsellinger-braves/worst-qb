@@ -60,6 +60,10 @@ export const ScoreboardView = {
                         </select>
                     </div>
 
+                    <a id="sb-cumulative-link" href="#/cumulative" class="btn" style="background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); padding: 0.4rem 0.85rem; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem;">
+                        📊 Season Cumulative
+                    </a>
+
                     <button id="sb-refresh-btn" class="btn" style="background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); padding: 0.4rem 0.85rem; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 0.4rem;">
                         <span id="sb-refresh-icon">🔄</span> Refresh
                     </button>
@@ -388,6 +392,9 @@ export const ScoreboardView = {
 
             const activeLeague = ScoreboardView.state.allLeagues.find(l => l.id === activeLeagueId);
             ScoreboardView.state.leagueInfo = activeLeague;
+
+            const cumLink = document.getElementById('sb-cumulative-link');
+            if (cumLink) cumLink.href = `#/cumulative?league=${activeLeagueId}`;
 
             // Populate League Dropdown
             const leagueSelect = document.getElementById('sb-league-select');

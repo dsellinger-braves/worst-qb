@@ -64,6 +64,7 @@ export class Router {
             document.getElementById('ln-home').href = `#/league_detail?league=${params.league}`;
             document.getElementById('ln-draft').href = `#/draft?league=${params.league}`;
             if (document.getElementById('ln-scoreboard')) document.getElementById('ln-scoreboard').href = `#/scoreboard?league=${params.league}`;
+            if (document.getElementById('ln-cumulative')) document.getElementById('ln-cumulative').href = `#/cumulative?league=${params.league}`;
             document.getElementById('ln-matchups').href = `#/matchups?league=${params.league}`;
             document.getElementById('ln-proj').href = `#/projections?league=${params.league}`;
             document.getElementById('ln-stats').href = `#/stats?league=${params.league}`;

@@ -1,6 +1,7 @@
 import { supabase } from '../supabase.js';
-import { calculateLeagueScore } from '../scoring.js';
+import { calculateLeagueScore } from '../scoring.js?v=1.8';
 import { PlayerProfileView } from './player_profile.js';
+import { PickOfPicks } from '../pick_of_picks.js?v=1.7';
 
 export const DraftView = {
     render: () => `
@@ -83,7 +84,12 @@ export const DraftView = {
                     
                     <!-- Draft Order Tracker -->
                     <div class="glass-panel" style="padding: 1.5rem;">
-                        <h3 style="margin-bottom: 0.5rem;">Draft Order</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <h3 style="margin: 0;">Draft Order</h3>
+                            <button id="draft-open-pop-btn" class="btn" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); color: #fbbf24; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;">
+                                🎯 Pick of the Picks
+                            </button>
+                        </div>
                         <p id="draft-order-label" style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem;">Inverse Season Standings</p>
                         <div id="draft-order-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; padding-right: 0.5rem;">
                             Loading draft order...
@@ -149,11 +155,7 @@ export const DraftView = {
         };
 
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            document.getElementById('qb-list').innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem;">Please log in to draft.</td></tr>';
-            return;
-        }
-        DraftView.state.userId = session.user.id;
+        DraftView.state.userId = session ? session.user.id : null;
 
         // Modal Handlers
         const modal = document.getElementById('profile-modal');
@@ -215,6 +217,14 @@ export const DraftView = {
             });
             
         window.DraftView = DraftView; // Expose for header sorting
+        window.PickOfPicks = PickOfPicks;
+
+        const popBtn = document.getElementById('draft-open-pop-btn');
+        if (popBtn) {
+            popBtn.onclick = () => {
+                PickOfPicks.openModal(DraftView.state.leagueId, DraftView.state.currentWeek);
+            };
+        }
     },
 
     setSort: (col) => {
@@ -451,14 +461,23 @@ export const DraftView = {
         const isSnake = draftType !== 'linear';
         
         const overrides = leagueInfo?.scoring_settings?.draft_order_overrides || {};
-        const baseOrderText = overrides[currentWeek] 
-            ? 'Manual Override Active' 
-            : (isSnake ? 'Snake Draft (Inverse Standings)' : 'Linear Draft (Inverse Standings)');
+        const isPopActive = !!(leagueInfo?.scoring_settings?.pick_of_the_picks?.[currentWeek]);
+        let baseOrderText = (isSnake ? 'Snake Draft (Inverse Standings)' : 'Linear Draft (Inverse Standings)');
+        if (isPopActive) {
+            baseOrderText = '🎯 Pick of the Picks Order';
+        } else if (overrides[currentWeek]) {
+            baseOrderText = 'Manual Override Active';
+        }
         
         const orderLabelEl = document.getElementById('draft-order-label');
         if (orderLabelEl) {
-            orderLabelEl.innerHTML = `${baseOrderText} <span style="margin-left: 0.5rem; font-size: 0.75rem; background: ${isSnake ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)'}; color: ${isSnake ? '#10b981' : '#60a5fa'}; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid ${isSnake ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'};">${isSnake ? '🐍 Snake Draft' : 'Linear Draft'}</span>`;
-            orderLabelEl.style.color = overrides[currentWeek] ? 'var(--accent-primary)' : 'var(--text-secondary)';
+            const badgeBg = isPopActive ? 'rgba(245, 158, 11, 0.15)' : (isSnake ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)');
+            const badgeBorder = isPopActive ? 'rgba(245, 158, 11, 0.35)' : (isSnake ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)');
+            const badgeColor = isPopActive ? '#fbbf24' : (isSnake ? '#10b981' : '#60a5fa');
+            const badgeText = isPopActive ? '🎯 Pick of the Picks' : (isSnake ? '🐍 Snake Draft' : 'Linear Draft');
+
+            orderLabelEl.innerHTML = `${baseOrderText} <span style="margin-left: 0.5rem; font-size: 0.75rem; background: ${badgeBg}; color: ${badgeColor}; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid ${badgeBorder};">${badgeText}</span>`;
+            orderLabelEl.style.color = (isPopActive || overrides[currentWeek]) ? 'var(--accent-primary)' : 'var(--text-secondary)';
         }
         
         if (members.length === 0) {
@@ -615,7 +634,9 @@ export const DraftView = {
                 : `<div style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">🏈</div>`;
 
             let draftButtonHtml = '';
-            if (myPicks.length >= 2 && !isAdmin) {
+            if (!DraftView.state.userId) {
+                draftButtonHtml = `<button class="btn" onclick="document.getElementById('auth-modal').style.display='flex';" style="font-size: 0.8rem; padding: 0.35rem 0.7rem; background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); color: #fff;">Log In</button>`;
+            } else if (myPicks.length >= 2 && !isAdmin) {
                 draftButtonHtml = `<button class="btn" disabled style="background: rgba(255,255,255,0.1); color: var(--text-secondary); cursor: not-allowed;">Full</button>`;
             } else if (!isMyTurn) {
                 if (isAdmin && !draftState.isComplete) {
